@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"github.com/kyuds/go-chord/chord"
 )
 
 func main() {
@@ -43,20 +44,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize Chord Node Here. 
+	c := chord.Initialize(node_ip)
 
 	if (joining) {
 		fmt.Printf("Joining Chord ring through exisiting node IP: %s\n", join_ip)
-		// Join Chord Node here. 
+		c.JoinRing(join_ip)
 	}
 
 	fmt.Printf("Current node IP: %s\n", node_ip)
-	fmt.Println("\nTo query, type 'query' followed by a key.")
+	fmt.Println("\nTo lookup, type 'lookup' followed by a key.")
 	fmt.Println("To put, type 'put' followed by a key and value.")
 	fmt.Print("To quit, type 'quit' and the program will exit.\n\n")
 
 	cli := bufio.NewReader(os.Stdin)
-	for {
+	loop: for {
 		fmt.Print("CHORD: ")
 		cmd, _ := cli.ReadString('\n')
 		cmd = strings.Trim(cmd, " \n")
@@ -68,16 +69,17 @@ func main() {
 		}
 
 		switch args[0] {
-		case "query":
-			fmt.Println(args[1])
-			// Query logic here.
+		case "lookup":
+			if (len(args) == 2) {
+				c.Lookup(args[1])
+			}
 		case "put":
-			fmt.Println(args[1])
-			// Put logic here. 
+			if (len(args) == 3) {
+				c.Put(args[1], args[2])
+			}
 		case "quit":
-			break
+			break loop
 		}
 	}
-
-	// Execute planned failures here. 
+	c.Exit()
 }
