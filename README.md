@@ -1,2 +1,4 @@
 # go-chord
-Implementation of Chord (DHash) in GoLang
+Implementation of [Chord (DHash)](https://pdos.csail.mit.edu/papers/chord:sigcomm01/chord_sigcomm.pdf) in GoLang.
+
+Currently a work in progress. 
