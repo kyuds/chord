@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
+	"flag"
 	"fmt"
 	"os"
-	"flag"
+	"strings"
 )
 
 func main() {
@@ -41,9 +43,41 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize Chord Node Here. 
+
 	if (joining) {
-		fmt.Println(join_ip)
+		fmt.Printf("Joining Chord ring through exisiting node IP: %s\n", join_ip)
+		// Join Chord Node here. 
 	}
 
-	fmt.Println(node_ip)
+	fmt.Printf("Current node IP: %s\n", node_ip)
+	fmt.Println("\nTo query, type 'query' followed by a key.")
+	fmt.Println("To put, type 'put' followed by a key and value.")
+	fmt.Print("To quit, type 'quit' and the program will exit.\n\n")
+
+	cli := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("CHORD: ")
+		cmd, _ := cli.ReadString('\n')
+		cmd = strings.Trim(cmd, " \n")
+		args := strings.Split(cmd, " ")
+		
+		if (len(args) == 0) {
+			fmt.Println("no args!")
+			continue
+		}
+
+		switch args[0] {
+		case "query":
+			fmt.Println(args[1])
+			// Query logic here.
+		case "put":
+			fmt.Println(args[1])
+			// Put logic here. 
+		case "quit":
+			break
+		}
+	}
+
+	// Execute planned failures here. 
 }
