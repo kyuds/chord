@@ -10,6 +10,14 @@ import (
 )
 
 func main() {
+	conf := chord.DefaultConfigs("localhost:8010")
+	_ = chord.Initialize(conf, true, "localhost:8000")
+	for {
+
+	}
+}
+
+func cli() {
 	jn := flag.NewFlagSet("join", flag.ExitOnError)
 	jnAddr := jn.String("address", "", "IP address for Chord node start on.")
 	jnRing := jn.String("", "", "existing Chord node's IP to join to.")
@@ -50,13 +58,7 @@ func main() {
 	fmt.Print("To quit, type 'quit' and the program will exit.\n\n")
 
 	conf := chord.DefaultConfigs(node_ip)
-	c, err := chord.Initialize(conf, joining, join_ip)
-
-	if err != nil {
-		fmt.Println("Error occurred while initializing Chord.")
-		fmt.Println(err)
-		return
-	}
+	c := chord.Initialize(conf, joining, join_ip)
 
 	cli := bufio.NewReader(os.Stdin)
 	loop: for {
@@ -77,11 +79,11 @@ func main() {
 			}
 		case "put":
 			if (len(args) == 3) {
-				err = c.Put(args[1], args[2])
+				_ = c.Put(args[1], args[2])
 			}
 		case "delete":
 			if (len(args) == 2) {
-				err = c.Delete(args[1])
+				_ = c.Delete(args[1])
 			}
 		case "quit":
 			break loop

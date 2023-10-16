@@ -7,15 +7,16 @@ import (
 	"time"
 )
 
-type chordcli struct {
-	chrd *node
-}
-
+// API for Chord Configurations
 type Config struct {
+	// node configs
 	Address string
+	Hash func() hash.Hash
+	// Replication int (TODO)
+
+	// gRPC configs
 	ServerOptions []grpc.ServerOption
 	DialOptions []grpc.DialOption
-	Hash func() hash.Hash
 	Timeout time.Duration
 	MaxIdle time.Duration
 }
@@ -23,23 +24,35 @@ type Config struct {
 func DefaultConfigs(address string) *Config {
 	return &Config {
 		Address: address,
+		Hash: sha1.New,
+		// TODO: figure out how to deal with these later. 
 		ServerOptions: nil,
 		DialOptions: nil,
-		Hash: sha1.New,
 		Timeout: 10 * time.Millisecond,
 		MaxIdle: 1000 * time.Millisecond,
 	}
 }
 
+// TODO
+// validate IP address, Hash func?
+func (c *Config) validate() error {
+	return nil
+}
+
+// API for Chord Process
+type chordcli struct {
+	chrd *node
+}
+
 // Initializes the chord client for the user.
-// Will return error if the specified IP and
-// PORT is already in use or has some other network
-// error. Will join an already existing chord
+// Will join an already existing chord
 // ring if joining is true on the specified
 // join_ip string. 
-func Initialize(conf *Config, joining bool, join_ip string) (*chordcli, error) {
-	n, err := newNode(conf)
+func Initialize(conf *Config, joining bool, join_ip string) *chordcli {
+	e := conf.validate()
+	if e != nil { panic(e) }
 
+	n, err := newNode(conf)
 	if err != nil { panic(err) }
 
 	if joining {
@@ -48,7 +61,7 @@ func Initialize(conf *Config, joining bool, join_ip string) (*chordcli, error) {
 	}
 
 	c := &chordcli{chrd: n}
-	return c, nil
+	return c
 }
 
 // Puts a key, value pair into the chord
