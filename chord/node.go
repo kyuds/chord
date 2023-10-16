@@ -17,7 +17,7 @@ type node struct {
 
 	// grpc
 	pb.UnimplementedChordServer
-	cmm comm
+	rpc rpc
 
 	// chord ring configs
 	successor string
@@ -37,11 +37,11 @@ func newNode(conf *Config) (*node, error) {
 	// start RPC server:
 	// - register chord server
 	// - start commLayer
-	tmpCmm, err := newComm(conf)
+	tmpRPC, err := newRPC(conf)
 	if err != nil { return nil, err }
-	n.cmm = tmpCmm
-	pb.RegisterChordServer(tmpCmm.server, n)
-	n.cmm.start()
+	n.rpc = tmpRPC
+	pb.RegisterChordServer(tmpRPC.server, n)
+	n.rpc.start()
 
 
 	// run background:
@@ -56,7 +56,7 @@ func (n *node) joinNode(address string) error {
 	// communicate to address
 	// check if hash function checksum align
 	// set predecessors and successors. 
-	out, err := n.cmm.getHashFuncCheckSum(address)
+	out, err := n.rpc.getHashFuncCheckSum(address)
 	if err != nil {
 		fmt.Println(err)
 		return err

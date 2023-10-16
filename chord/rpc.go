@@ -15,7 +15,7 @@ import (
 
 // Connection/Communication Management
 // Creating a pool server for gRPC connections. 
-type comm interface {
+type rpc interface {
 	// setup
 	start() error
 	stop() error
@@ -26,7 +26,7 @@ type comm interface {
 	// hash table
 }
 
-type commLayer struct {
+type rpcLayer struct {
 	listener *net.TCPListener
 	server *grpc.Server
 	pool map[string]*gConn
@@ -43,11 +43,11 @@ type gConn struct {
 	lastActive time.Time
 }
 
-func newComm(conf *Config) (*commLayer, error) {
+func newRPC(conf *Config) (*rpcLayer, error) {
 	lis, err := net.Listen("tcp", conf.Address)
 	if err != nil { return nil, err }
 
-	c := &commLayer {
+	r := &rpcLayer {
 		listener: lis.(*net.TCPListener),
 		server: grpc.NewServer(/*conf.ServerOptions...*/),
 		pool: make(map[string]*gConn),
@@ -56,57 +56,57 @@ func newComm(conf *Config) (*commLayer, error) {
 		shutdown: 0,
 	}
 
-	return c, nil
+	return r, nil
 }
 
-func (c *commLayer) start() error {
+func (r *rpcLayer) start() error {
 	// start server to listen to port
 	go func() {
-		c.server.Serve(c.listener)
+		r.server.Serve(r.listener)
 	}()
 
 	// garbage collect timed out connections
 	go func() {
 		ticker := time.NewTicker(60 * time.Second)
 		for {
-			if atomic.LoadInt32(&c.shutdown) == 1 {
+			if atomic.LoadInt32(&r.shutdown) == 1 {
 				return
 			}
 			select {
 			case <-ticker.C:
-				c.poolLock.Lock()
-				for ip, conn := range c.pool {
-					if time.Since(conn.lastActive) > c.maxidle {
-						conn.close()
-						delete(c.pool, ip)
+				r.poolLock.Lock()
+				for ip, conn := range r.pool {
+					if time.Since(conn.lastActive) > r.maxidle {
+						conn.conn.Close()
+						delete(r.pool, ip)
 					}
 				}
-				c.poolLock.Unlock()
+				r.poolLock.Unlock()
 			}
 		}
 	}()
 	return nil
 }
 
-func (c *commLayer) stop() error {
-	atomic.StoreInt32(&c.shutdown, 1)
-	c.poolLock.Lock()
-	defer c.poolLock.Unlock()
-	c.server.Stop()
-	for _, conn := range c.pool {
-		conn.close()
+func (r *rpcLayer) stop() error {
+	atomic.StoreInt32(&r.shutdown, 1)
+	r.poolLock.Lock()
+	defer r.poolLock.Unlock()
+	r.server.Stop()
+	for _, conn := range r.pool {
+		conn.conn.Close()
 	}
-	c.pool = nil
+	r.pool = nil
 	return nil
 }
 
-func (c *commLayer) getClient(address string) (pb.ChordClient, error) {
-	c.poolLock.RLock()
-	if atomic.LoadInt32(&c.shutdown) == 1 {
+func (r *rpcLayer) getClient(address string) (pb.ChordClient, error) {
+	r.poolLock.RLock()
+	if atomic.LoadInt32(&r.shutdown) == 1 {
 		return nil, fmt.Errorf("Server is shutdown.")
 	}
-	gconn, ok := c.pool[address]
-	c.poolLock.RUnlock()
+	gconn, ok := r.pool[address]
+	r.poolLock.RUnlock()
 
 	if ok {
 		return gconn.client, nil
@@ -122,26 +122,22 @@ func (c *commLayer) getClient(address string) (pb.ChordClient, error) {
 		conn: conn,
 		lastActive: time.Now(),
 	}
-	c.poolLock.Lock()
-	c.pool[address] = gconn
-	c.poolLock.Unlock()
+	r.poolLock.Lock()
+	r.pool[address] = gconn
+	r.poolLock.Unlock()
 	return client, nil
 }
 
-func (c * gConn) close() {
-	c.conn.Close()
-}
-
 // gRPC Abstraction
-func (c *commLayer) getHashFuncCheckSum(address string) (string, error) {
-	client, err := c.getClient(address)
+func (r *rpcLayer) getHashFuncCheckSum(address string) (string, error) {
+	client, err := r.getClient(address)
 	if err != nil { return "", err }
 	
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	r, err := client.GetHashFuncCheckSum(ctx, &pb.Empty{})
+	res, err := client.GetHashFuncCheckSum(ctx, &pb.Empty{})
 	if err != nil { return "", err }
 
-	return r.HashVal, nil
+	return res.HashVal, nil
 }
