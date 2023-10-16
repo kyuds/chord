@@ -12,6 +12,8 @@ type Config struct {
 	// node configs
 	Address string
 	Hash func() hash.Hash
+	Joining bool
+	JoinIP string
 	// Replication int (TODO)
 
 	// gRPC configs
@@ -21,10 +23,12 @@ type Config struct {
 	MaxIdle time.Duration
 }
 
-func DefaultConfigs(address string) *Config {
+func DefaultConfigs(address string, joining bool, join_ip string) *Config {
 	return &Config {
 		Address: address,
 		Hash: sha1.New,
+		Joining: joining,
+		JoinIP: join_ip,
 		// TODO: figure out how to deal with these later. 
 		ServerOptions: nil,
 		DialOptions: nil,
@@ -48,17 +52,12 @@ type chordcli struct {
 // Will join an already existing chord
 // ring if joining is true on the specified
 // join_ip string. 
-func Initialize(conf *Config, joining bool, join_ip string) *chordcli {
+func Initialize(conf *Config) *chordcli {
 	e := conf.validate()
 	if e != nil { panic(e) }
 
 	n, err := newNode(conf)
 	if err != nil { panic(err) }
-
-	if joining {
-		err = n.joinNode(join_ip)
-		if err != nil { panic(err) }
-	}
 
 	c := &chordcli{chrd: n}
 	return c

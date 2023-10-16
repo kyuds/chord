@@ -34,15 +34,23 @@ func newNode(conf *Config) (*node, error) {
 
 	// set up finger table
 	// set myself as successor & predecessor
+
 	// start RPC server:
 	// - register chord server
-	// - start commLayer
+	// - start rpc server
 	tmpRPC, err := newRPC(conf)
 	if err != nil { return nil, err }
 	n.rpc = tmpRPC
 	pb.RegisterChordServer(tmpRPC.server, n)
 	n.rpc.start()
 
+	if (conf.Joining) {
+		err = n.joinNode(conf.JoinIP)
+		if err != nil {
+			n.rpc.stop()
+			return nil, err
+		}
+	}
 
 	// run background:
 	// - stabilize
@@ -56,12 +64,11 @@ func (n *node) joinNode(address string) error {
 	// communicate to address
 	// check if hash function checksum align
 	// set predecessors and successors. 
-	out, err := n.rpc.getHashFuncCheckSum(address)
-	if err != nil {
-		fmt.Println(err)
-		return err
+	h, err := n.rpc.getHashFuncCheckSum(address)
+	if err != nil { return err }
+	if h != getFuncHash(n.hf) {
+		return fmt.Errorf(sameHash)
 	}
-	fmt.Println(out)
 
 	return nil
 }
@@ -72,3 +79,8 @@ func (n *node) GetHashFuncCheckSum(ctx context.Context, e *pb.Empty) (*pb.HashFu
 	fmt.Printf("sending: %s\n", hashValue)
 	return &pb.HashFuncResponse{HashVal: hashValue}, nil
 }
+
+// Error Messages
+var (
+	sameHash = "Checksum of hash functions on the nodes do not match. Please check that the same hash functions are being used."
+)

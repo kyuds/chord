@@ -46,7 +46,6 @@ type gConn struct {
 func newRPC(conf *Config) (*rpcLayer, error) {
 	lis, err := net.Listen("tcp", conf.Address)
 	if err != nil { return nil, err }
-
 	r := &rpcLayer {
 		listener: lis.(*net.TCPListener),
 		server: grpc.NewServer(/*conf.ServerOptions...*/),
@@ -55,7 +54,6 @@ func newRPC(conf *Config) (*rpcLayer, error) {
 		maxidle: conf.MaxIdle,
 		shutdown: 0,
 	}
-
 	return r, nil
 }
 
