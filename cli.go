@@ -44,17 +44,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	c := chord.Initialize(node_ip)
-
-	if (joining) {
-		fmt.Printf("Joining Chord ring through exisiting node IP: %s\n", join_ip)
-		c.JoinRing(join_ip)
-	}
-
 	fmt.Printf("Current node IP: %s\n", node_ip)
 	fmt.Println("\nTo lookup, type 'lookup' followed by a key.")
 	fmt.Println("To put, type 'put' followed by a key and value.")
 	fmt.Print("To quit, type 'quit' and the program will exit.\n\n")
+
+	conf := chord.DefaultConfigs(node_ip)
+	c, err := chord.Initialize(conf, joining, join_ip)
+
+	if err != nil {
+		fmt.Println("Error occurred while initializing Chord.")
+		fmt.Println(err)
+		return
+	}
 
 	cli := bufio.NewReader(os.Stdin)
 	loop: for {
@@ -71,11 +73,15 @@ func main() {
 		switch args[0] {
 		case "lookup":
 			if (len(args) == 2) {
-				c.Lookup(args[1])
+				_, _ = c.Lookup(args[1])
 			}
 		case "put":
 			if (len(args) == 3) {
-				c.Put(args[1], args[2])
+				err = c.Put(args[1], args[2])
+			}
+		case "delete":
+			if (len(args) == 2) {
+				err = c.Delete(args[1])
 			}
 		case "quit":
 			break loop
