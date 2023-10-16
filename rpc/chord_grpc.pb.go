@@ -4,7 +4,7 @@
 // - protoc             v4.24.4
 // source: rpc/chord.proto
 
-package rpc
+package pb
 
 import (
 	context "context"
