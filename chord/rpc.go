@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 	"google.golang.org/grpc"
-	"github.com/kyuds/go-chord/rpc"
+	"github.com/kyuds/go-chord/pb"
 )
 
 // bindings for gRPC protocol in /rpc.
@@ -38,7 +38,7 @@ type commLayer struct {
 
 type gConn struct {
 	address string
-	client rpc.ChordClient
+	client pb.ChordClient
 	conn *grpc.ClientConn
 	lastActive time.Time
 }
@@ -100,7 +100,7 @@ func (c *commLayer) stop() error {
 	return nil
 }
 
-func (c *commLayer) getClient(address string) (rpc.ChordClient, error) {
+func (c *commLayer) getClient(address string) (pb.ChordClient, error) {
 	c.poolLock.RLock()
 	if atomic.LoadInt32(&c.shutdown) == 1 {
 		return nil, fmt.Errorf("Server is shutdown.")
@@ -115,7 +115,7 @@ func (c *commLayer) getClient(address string) (rpc.ChordClient, error) {
 	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil { return nil, err }
 
-	client := rpc.NewChordClient(conn)
+	client := pb.NewChordClient(conn)
 	gconn = &gConn{
 		address: address,
 		client: client,
@@ -140,7 +140,7 @@ func (c *commLayer) getHashFuncCheckSum(address string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	r, err := client.GetHashFuncCheckSum(ctx, &rpc.Empty{})
+	r, err := client.GetHashFuncCheckSum(ctx, &pb.Empty{})
 	if err != nil { return "", err }
 
 	return r.HashVal, nil

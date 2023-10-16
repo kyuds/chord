@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"context"
 	"hash"
-	"github.com/kyuds/go-chord/rpc"
+	"github.com/kyuds/go-chord/pb"
 )
 
 type node struct {
@@ -16,7 +16,7 @@ type node struct {
 	ft fingertable
 
 	// grpc
-	rpc.UnimplementedChordServer
+	pb.UnimplementedChordServer
 	cmm comm
 
 	// chord ring configs
@@ -40,7 +40,7 @@ func newNode(conf *Config) (*node, error) {
 	tmpCmm, err := newComm(conf)
 	if err != nil { return nil, err }
 	n.cmm = tmpCmm
-	rpc.RegisterChordServer(tmpCmm.server, n)
+	pb.RegisterChordServer(tmpCmm.server, n)
 	n.cmm.start()
 
 
@@ -67,8 +67,8 @@ func (n *node) joinNode(address string) error {
 }
 
 // gRPC Server (chord_grpc.pb.go) Implementation
-func (n *node) GetHashFuncCheckSum(ctx context.Context, e *rpc.Empty) (*rpc.HashFuncResponse, error) {
+func (n *node) GetHashFuncCheckSum(ctx context.Context, e *pb.Empty) (*pb.HashFuncResponse, error) {
 	hashValue := getFuncHash(n.hf)
 	fmt.Printf("sending: %s\n", hashValue)
-	return &rpc.HashFuncResponse{HashVal: hashValue}, nil
+	return &pb.HashFuncResponse{HashVal: hashValue}, nil
 }

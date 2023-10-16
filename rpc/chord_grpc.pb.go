@@ -35,7 +35,7 @@ func NewChordClient(cc grpc.ClientConnInterface) ChordClient {
 
 func (c *chordClient) GetHashFuncCheckSum(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*HashFuncResponse, error) {
 	out := new(HashFuncResponse)
-	err := c.cc.Invoke(ctx, "/rpc.Chord/GetHashFuncCheckSum", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Chord/GetHashFuncCheckSum", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func _Chord_GetHashFuncCheckSum_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rpc.Chord/GetHashFuncCheckSum",
+		FullMethod: "/pb.Chord/GetHashFuncCheckSum",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ChordServer).GetHashFuncCheckSum(ctx, req.(*Empty))
@@ -92,7 +92,7 @@ func _Chord_GetHashFuncCheckSum_Handler(srv interface{}, ctx context.Context, de
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Chord_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "rpc.Chord",
+	ServiceName: "pb.Chord",
 	HandlerType: (*ChordServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
