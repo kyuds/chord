@@ -3,8 +3,8 @@ package chord
 import (
 	"crypto/sha1"
 	"encoding/hex"
-	"fmt"
 	"hash"
+	"math/big"
 	"reflect"
 	"runtime"
 )
@@ -22,6 +22,7 @@ func getFuncHash(i interface{}) string {
 	return hex.EncodeToString(checkSum[:])
 }
 
+// use hash function to convert key to hashed string. 
 func getHash(h func() hash.Hash, key string) string {
 	checkSum := h().Sum([]byte(key))
 	return hex.EncodeToString(checkSum[:])
@@ -29,9 +30,10 @@ func getHash(h func() hash.Hash, key string) string {
 
 // TODO: validate IP address
 func (c *Config) validate() error {
-	hashFunctionType := reflect.TypeOf(c.Hash).String()
-	if hashFunctionType != "func() hash.Hash" {
-		return fmt.Errorf("Please include a valid hash function of 'func() hash.Hash'")
-	}
 	return nil
+}
+
+// big Power calculator (since big library is overcomplicated)
+func bigPow(x, y int) *big.Int {
+	return big.NewInt(0).Exp(big.NewInt(int64(x)), big.NewInt(int64(y)), big.NewInt(0))
 }

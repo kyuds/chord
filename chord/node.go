@@ -12,16 +12,14 @@ type node struct {
 	id string
 	ip string
 	hf func() hash.Hash
-	ft fingertable
+
+	// fingertable
+	ft fingerTable
 	ftLen int
 
 	// grpc
 	pb.UnimplementedChordServer
 	rpc rpc
-
-	// chord ring configs
-	successor string
-	predecessor string
 }
 
 func newNode(conf *Config) (*node, error) {
@@ -31,13 +29,10 @@ func newNode(conf *Config) (*node, error) {
 		hf: conf.Hash,
 		ftLen: conf.Hash().Size(),
 	}
-
-	// set up finger table
+	n.ft = initFingerTable(n.id, n.ip, n.ftLen)
 	// set myself as successor & predecessor
 
-	// start RPC server:
-	// - register chord server
-	// - start rpc server
+	// start RPC server: register chord server; start rpc server
 	tmpRPC, err := newRPC(conf)
 	if err != nil { return nil, err }
 	n.rpc = tmpRPC
@@ -73,11 +68,37 @@ func (n *node) joinNode(address string) error {
 	return nil
 }
 
+// predecessor and successor operations (Chord p.5)
+func (n *node) findSuccessor(key string) (string, error) {
+	pred, err := n.findPredecessor(key)
+	if err != nil { return "", err }
+	succ, err := n.rpc.getSuccessor(pred)
+	if err != nil { return "", err }
+	return succ, nil
+}
+
+func (n *node) findPredecessor(key string) (string, error) {
+
+}
+
+func (n *node) closestPrecedingFinger(key string) (string, error) {
+
+}
+
 // gRPC Server (chord_grpc.pb.go) Implementation
-func (n *node) GetHashFuncCheckSum(ctx context.Context, e *pb.Empty) (*pb.HashFuncResponse, error) {
+func (n *node) GetHashFuncCheckSum(ctx context.Context, r *pb.Empty) (*pb.HashFuncResponse, error) {
 	hashValue := getFuncHash(n.hf)
 	fmt.Printf("sending: %s\n", hashValue)
 	return &pb.HashFuncResponse{HashVal: hashValue}, nil
+}
+
+func (n *node) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
+	return &pb.AddressResponse{Address: n.ft.getSuccessor()}, nil
+}
+
+func (n *node) FindPredecessor(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
+
+	return &pb.AddressResponse{Address: ""}, nil
 }
 
 // Error Messages

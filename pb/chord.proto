@@ -15,7 +15,7 @@ service Chord {
 
     // Chord Protocol RPCs
     rpc GetSuccessor(Empty) returns (AddressResponse);
-    rpc FindPredecessor(HashKeyRequest) returns (AddressResponse);
+    rpc ClosestPrecedingFinger(KeyRequest) returns (AddressResponse);
 
     // Node Joining RPCs
 
@@ -28,8 +28,8 @@ message HashFuncResponse {
     string HashVal = 1;
 }
 
-message HashKeyRequest {
-    string HashVal = 1;
+message KeyRequest {
+    string Key = 1;
 }
 
 message AddressResponse {
