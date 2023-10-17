@@ -6,31 +6,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	//"crypto/sha256"
 	"github.com/kyuds/go-chord/chord"
 )
 
 func main() {
-	var conf *chord.Config
-
-	if os.Args[1] == "1" {
-		conf = chord.DefaultConfigs("localhost:8000")
-	} else {
-		conf = chord.DefaultConfigs("localhost:8001")
-		conf.SetJoinNode("localhost:8000")
-	}
-
-	//conf.Hash = sha256.New
-	_ = chord.Initialize(conf)
-	for {
-
-	}
-}
-
-func cli() {
 	jn := flag.NewFlagSet("join", flag.ExitOnError)
 	jnAddr := jn.String("address", "", "IP address for Chord node start on.")
-	jnRing := jn.String("joinOn", "", "existing Chord node's IP to join to.")
+	jnRing := jn.String("join", "", "existing Chord node's IP to join to.")
 
 	ct := flag.NewFlagSet("create", flag.ExitOnError)
 	ctAddr := ct.String("address", "", "IP address for Chord node start on.")
@@ -87,7 +69,8 @@ func cli() {
 		switch args[0] {
 		case "lookup":
 			if (len(args) == 2) {
-				_, _ = c.Lookup(args[1])
+				ret, _ := c.Lookup(args[1])
+				fmt.Println(ret)
 			}
 		case "quit":
 			break loop
