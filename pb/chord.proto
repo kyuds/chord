@@ -18,6 +18,9 @@ service Chord {
     rpc ClosestPrecedingFinger(KeyRequest) returns (AddressResponse);
 
     // Node Joining RPCs
+    rpc FindSuccessor(KeyRequest) returns (AddressResponse);
+    rpc GetPredecessor(Empty) returns (AddressResponse);
+    rpc Notify(AddressRequest) returns (Empty);
 
     // Node Leaving RPCs
 }
@@ -30,6 +33,10 @@ message HashFuncResponse {
 
 message KeyRequest {
     string Key = 1;
+}
+
+message AddressRequest {
+    string Address = 1;
 }
 
 message AddressResponse {
