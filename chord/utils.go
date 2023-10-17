@@ -24,7 +24,9 @@ func getFuncHash(i interface{}) string {
 
 // use hash function to convert key to hashed string. 
 func getHash(h func() hash.Hash, key string) string {
-	checkSum := h().Sum([]byte(key))
+	hasher := h()
+	hasher.Write([]byte(key))
+	checkSum := hasher.Sum(nil)
 	return hex.EncodeToString(checkSum[:])
 }
 

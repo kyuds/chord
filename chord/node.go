@@ -3,7 +3,10 @@ package chord
 import (
 	"fmt"
 	"context"
+	"encoding/hex"
 	"hash"
+	"sync"
+	"time"
 	"github.com/kyuds/go-chord/pb"
 )
 
@@ -12,6 +15,8 @@ type node struct {
 	id string
 	ip string
 	hf func() hash.Hash
+	predecessor string
+	predLock sync.RWMutex
 
 	// fingertable
 	ft fingerTable
@@ -27,10 +32,10 @@ func newNode(conf *Config) (*node, error) {
 		id: getHash(conf.Hash, conf.Address),
 		ip: conf.Address,
 		hf: conf.Hash,
-		ftLen: conf.Hash().Size(),
+		ftLen: conf.Hash().Size() * 8,
 	}
 	n.ft = initFingerTable(n.id, n.ip, n.ftLen)
-	// set myself as successor & predecessor
+	n.predecessor = ""
 
 	// start RPC server: register chord server; start rpc server
 	tmpRPC, err := newRPC(conf)
@@ -48,8 +53,36 @@ func newNode(conf *Config) (*node, error) {
 	}
 
 	// run background:
-	// - stabilize
-	// - fix fingers
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				n.stabilize()
+			/*
+			case <-node.shutdownCh:
+				ticker.Stop()
+				return
+			*/
+			}
+		}
+	}()
+	
+	go func() {
+		next := 0
+		ticker := time.NewTicker(100 * time.Millisecond)
+		for {
+			select {
+			case <-ticker.C:
+				next = n.fixFinger(next)
+			/*
+			case <-node.shutdownCh:
+				ticker.Stop()
+				return
+			*/
+			}
+		}
+	}()
 	// - check predecessor
 
 	return n, nil
@@ -64,6 +97,12 @@ func (n *node) joinNode(address string) error {
 	if h != getFuncHash(n.hf) {
 		return fmt.Errorf(sameHash)
 	}
+
+	succ, err := n.rpc.findSuccessor(address, n.ip)
+	if err != nil { return err }
+
+	n.ft.get(0).ipaddr = succ
+	n.ft.get(0).iphash = getHash(n.hf, succ)
 
 	return nil
 }
@@ -113,6 +152,9 @@ func (n *node) closestPrecedingFinger(key string) string {
 	c1 := bigify(n.ip)
 	c2 := bigify(getHash(n.hf, key))
 	for i := n.ftLen - 1; i >= 0; i-- {
+		if !n.ft.get(i).valid {
+			continue
+		}
 		if bigBetween(c1, c2, n.ft.get(i).id) {
 			return n.ft.get(i).ipaddr
 		}
@@ -120,10 +162,41 @@ func (n *node) closestPrecedingFinger(key string) string {
 	return n.ip
 }
 
+// chord extended concurrent logic
+func (n *node) stabilize() {
+	succ := n.ft.getSuccessor()
+	if succ == n.ip {
+		return
+	}
+	pred, err := n.rpc.getPredecessor(succ)
+	if err != nil {
+		fmt.Println(err)
+	}
+	if pred != "" && bigBetween(bigify(n.ip), bigify(succ), bigify(pred)) {
+		succ = pred
+	}
+	n.rpc.notify(succ, n.ip)
+}
+
+func (n *node) fixFinger(i int) int{
+	find := n.ft.get(i).id
+	succ, err := n.findSuccessor(hex.EncodeToString(find.Bytes()))
+	if err != nil {
+		fmt.Println("error in fixing fingertable")
+		return i
+	}
+	n.ft.lock.Lock()
+	defer n.ft.lock.Unlock()
+	n.ft.get(i).ipaddr = succ
+	n.ft.get(i).iphash = getHash(n.hf, succ)
+	n.ft.get(i).valid = true
+
+	return (i + 1) % n.ftLen
+}
+
 // gRPC Server (chord_grpc.pb.go) Implementation
 func (n *node) GetHashFuncCheckSum(ctx context.Context, r *pb.Empty) (*pb.HashFuncResponse, error) {
 	hashValue := getFuncHash(n.hf)
-	fmt.Printf("sending: %s\n", hashValue)
 	return &pb.HashFuncResponse{HashVal: hashValue}, nil
 }
 
@@ -134,6 +207,26 @@ func (n *node) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressRespon
 func (n *node) ClosestPrecedingFinger(ctx context.Context, r *pb.KeyRequest) (*pb.AddressResponse, error) {
 	a := n.closestPrecedingFinger(r.Key)
 	return &pb.AddressResponse{Address: a}, nil
+}
+
+func (n *node) FindSuccessor(ctx context.Context, r *pb.KeyRequest) (*pb.AddressResponse, error) {
+	a, err := n.findSuccessor(r.Key)
+	if err != nil { return &pb.AddressResponse{Address: ""}, nil }
+	return &pb.AddressResponse{Address: a}, nil
+}
+
+func (n *node) GetPredecessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
+	return &pb.AddressResponse{Address: n.predecessor}, nil
+}
+
+func (n *node) Notify(ctx context.Context, r *pb.AddressRequest) (*pb.Empty, error) {
+	a := r.Address
+	
+	if n.predecessor == "" || bigBetween(bigify(n.predecessor), bigify(n.ip), bigify(a)) {
+		n.predecessor = a
+	}
+
+	return &pb.Empty{}, nil
 }
 
 // Error Messages

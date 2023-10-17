@@ -1,6 +1,7 @@
 package chord
 
 import (
+	"fmt"
 	"math/big"
 	"sync"
 )
@@ -9,6 +10,7 @@ type fingerEntry struct {
 	id *big.Int
 	iphash string
 	ipaddr string
+	valid bool
 }
 
 type fingerTable struct {
@@ -24,8 +26,10 @@ func initFingerTable(h string, address string, size int) fingerTable {
 			id: computeFingerId(h, i, size),
 			iphash: h,
 			ipaddr: address,
+			valid: false,
 		}
 	}
+	tb[0].valid = true
 	return fingerTable { tb: tb }
 }
 
@@ -42,4 +46,14 @@ func (f *fingerTable) get(i int) *fingerEntry {
 
 func (f *fingerTable) getSuccessor() string {
 	return f.tb[0].ipaddr
+}
+
+func (f *fingerTable) printself() {
+	for _, i := range f.tb {
+		fmt.Print(i.id)
+		fmt.Print(" ")
+		fmt.Print(i.ipaddr)
+		fmt.Print(" ")
+		fmt.Println(i.valid)
+	}
 }
