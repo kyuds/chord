@@ -11,27 +11,6 @@ import (
 	"github.com/kyuds/go-chord/pb"
 )
 
-/*
-Bindings for gRPC protocol in /rpc.
-
-gRPC is fundamentally a client, server model. Therefore, typical gRPC programs implement
-a client and a server to provide one-way communication (at least in most use cases) in
-which a client sends a message to a server, the server performs some action, and then
-responds with a response packet.
-
-In this implementation of Chord, the connection logic for both the client and the server
-is implemented in rpc.go, and the server side processing for gRPC requests are defined in
-node.go (under "gRPC Server (chord_grpc.pb.go) Implementation" section). One can easily 
-identify sections of the server (which is defined in rpcLayer) and corresponding functions
-of start() and stop() to start and stop the server, and the client (which is defined as gConn)
-which is instantiated with getClient(). The clients are stored in a pool map so that
-repetitive queries can easily be established. 
-
-Finally, the rpc interface provides an abstraction layer between bare metal gRPC invocations
-and the processing of these responses to return user-familiar definitions to the code. These
-definitions are under "gRPC Abstraction"
-*/
-
 // Connection/Communication Management
 // Creating a pool server for gRPC connections. 
 type rpc interface {
@@ -42,6 +21,7 @@ type rpc interface {
 
 	// chord
 	getSuccessor(string) (string, error)
+	closestPrecedingFinger(string, string) (string, error)
 
 	// hash table
 }
@@ -170,6 +150,19 @@ func (r *rpcLayer) getSuccessor(address string) (string, error) {
 	defer cancel()
 
 	res, err := client.GetSuccessor(ctx, &pb.Empty{})
+	if err != nil { return "", err }
+
+	return res.Address, nil
+}
+
+func (r *rpcLayer) closestPrecedingFinger(address, key string) (string, error) {
+	client, err := r.getClient(address)
+	if err != nil { return "", err }
+	
+	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
+	defer cancel()
+
+	res, err := client.ClosestPrecedingFinger(ctx, &pb.KeyRequest{Key: key})
 	if err != nil { return "", err }
 
 	return res.Address, nil

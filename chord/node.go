@@ -72,17 +72,52 @@ func (n *node) joinNode(address string) error {
 func (n *node) findSuccessor(key string) (string, error) {
 	pred, err := n.findPredecessor(key)
 	if err != nil { return "", err }
+
+	if pred == n.ip {
+		return n.ft.getSuccessor(), nil
+	}
+
 	succ, err := n.rpc.getSuccessor(pred)
 	if err != nil { return "", err }
 	return succ, nil
 }
 
 func (n *node) findPredecessor(key string) (string, error) {
+	curr := n.ip
+	succ := n.ft.getSuccessor()
+	bigKey := bigify(getHash(n.hf, key))
+	var err error
 
+	for {
+		if curr == n.ip {
+			succ = n.ft.getSuccessor()
+		} else {
+			succ, err = n.rpc.getSuccessor(curr)
+			if err != nil { return "", err }
+		}
+		if bigBetweenRightInclude(bigify(curr), bigify(succ), bigKey) {
+			break
+		}
+		if curr == n.ip {
+			curr = n.closestPrecedingFinger(key)
+		} else {
+			curr, err = n.rpc.closestPrecedingFinger(curr, key)
+			if err != nil { return "", err }
+		}
+	}
+
+	return curr, nil
 }
 
-func (n *node) closestPrecedingFinger(key string) (string, error) {
-
+func (n *node) closestPrecedingFinger(key string) string {
+	c1 := bigify(n.ip)
+	c2 := bigify(getHash(n.hf, key))
+	for i := n.ftLen - 1; i >= 0; i-- {
+		if bigBetween(c1, c2, n.ft.get(i).id) {
+			return n.ft.get(i).ipaddr
+		}
+	}
+	return n.ip
 }
 
 // gRPC Server (chord_grpc.pb.go) Implementation
@@ -96,9 +131,9 @@ func (n *node) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressRespon
 	return &pb.AddressResponse{Address: n.ft.getSuccessor()}, nil
 }
 
-func (n *node) FindPredecessor(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
-
-	return &pb.AddressResponse{Address: ""}, nil
+func (n *node) ClosestPrecedingFinger(ctx context.Context, r *pb.KeyRequest) (*pb.AddressResponse, error) {
+	a := n.closestPrecedingFinger(r.Key)
+	return &pb.AddressResponse{Address: a}, nil
 }
 
 // Error Messages

@@ -6,7 +6,7 @@ import (
 )
 
 type fingerEntry struct {
-	id big.Int
+	id *big.Int
 	iphash string
 	ipaddr string
 }
@@ -19,7 +19,7 @@ type fingerTable struct {
 // prebuild hash spaces
 func initFingerTable(h string, address string, size int) fingerTable {
 	tb := make([]*fingerEntry, size)
-	for i := 1; i < size; i++ {
+	for i := 0; i < size; i++ {
 		tb[i] = &fingerEntry {
 			id: computeFingerId(h, i, size),
 			iphash: h,
@@ -30,10 +30,10 @@ func initFingerTable(h string, address string, size int) fingerTable {
 }
 
 // from Chord paper: (hash + 2^i) mod 2^m
-func computeFingerId(hashed string, i int, size int) big.Int {
-	r := new(big.Int).SetBytes([]byte(hashed))
+func computeFingerId(hashed string, i int, size int) *big.Int {
+	r := bigify(hashed)
 	r.Add(r, bigPow(2, i))
-	return *big.NewInt(0).Mod(r, bigPow(2, size))
+	return big.NewInt(0).Mod(r, bigPow(2, size))
 }
 
 func (f *fingerTable) get(i int) *fingerEntry {

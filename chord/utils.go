@@ -33,7 +33,27 @@ func (c *Config) validate() error {
 	return nil
 }
 
-// big Power calculator (since big library is overcomplicated)
+// math/big std library abstractions
+func bigify(hashed string) *big.Int {
+	return new(big.Int).SetBytes([]byte(hashed))
+}
+
 func bigPow(x, y int) *big.Int {
 	return big.NewInt(0).Exp(big.NewInt(int64(x)), big.NewInt(int64(y)), big.NewInt(0))
+}
+
+func bigBetween(x, y, key *big.Int) bool {
+	switch x.Cmp(y) {
+	case -1:
+		return x.Cmp(key) == -1 && y.Cmp(key) == 1
+	case 0:
+		return x.Cmp(key) != 0
+	case 1:
+		return x.Cmp(key) == -1 || y.Cmp(key) == 1
+	}
+	return true
+}
+
+func bigBetweenRightInclude(x, y, key *big.Int) bool {
+	return bigBetween(x, y, key) || y.Cmp(key) == 0
 }

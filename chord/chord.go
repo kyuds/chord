@@ -88,7 +88,9 @@ func Initialize(conf *Config) *chordcli {
 // Looks up the given key and returns the
 // node's address responsible for the key. 
 func (c *chordcli) Lookup(key string) (string, error) {
-	return "no ip address", nil
+	ip, err := c.chrd.findSuccessor(key)
+	if err != nil { return "", err }
+	return ip, nil
 }
 
 // Performs a planned exit of the node. 
