@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v4.24.4
-// source: rpc/chord.proto
+// source: pb/chord.proto
 
 package pb
 
@@ -22,7 +22,11 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ChordClient interface {
+	// Chord Integrity RPCs
 	GetHashFuncCheckSum(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*HashFuncResponse, error)
+	// Chord Protocol RPCs
+	GetSuccessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AddressResponse, error)
+	FindPredecessor(ctx context.Context, in *HashKeyRequest, opts ...grpc.CallOption) (*AddressResponse, error)
 }
 
 type chordClient struct {
@@ -42,11 +46,33 @@ func (c *chordClient) GetHashFuncCheckSum(ctx context.Context, in *Empty, opts .
 	return out, nil
 }
 
+func (c *chordClient) GetSuccessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AddressResponse, error) {
+	out := new(AddressResponse)
+	err := c.cc.Invoke(ctx, "/pb.Chord/GetSuccessor", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chordClient) FindPredecessor(ctx context.Context, in *HashKeyRequest, opts ...grpc.CallOption) (*AddressResponse, error) {
+	out := new(AddressResponse)
+	err := c.cc.Invoke(ctx, "/pb.Chord/FindPredecessor", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ChordServer is the server API for Chord service.
 // All implementations must embed UnimplementedChordServer
 // for forward compatibility
 type ChordServer interface {
+	// Chord Integrity RPCs
 	GetHashFuncCheckSum(context.Context, *Empty) (*HashFuncResponse, error)
+	// Chord Protocol RPCs
+	GetSuccessor(context.Context, *Empty) (*AddressResponse, error)
+	FindPredecessor(context.Context, *HashKeyRequest) (*AddressResponse, error)
 	mustEmbedUnimplementedChordServer()
 }
 
@@ -56,6 +82,12 @@ type UnimplementedChordServer struct {
 
 func (UnimplementedChordServer) GetHashFuncCheckSum(context.Context, *Empty) (*HashFuncResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetHashFuncCheckSum not implemented")
+}
+func (UnimplementedChordServer) GetSuccessor(context.Context, *Empty) (*AddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSuccessor not implemented")
+}
+func (UnimplementedChordServer) FindPredecessor(context.Context, *HashKeyRequest) (*AddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FindPredecessor not implemented")
 }
 func (UnimplementedChordServer) mustEmbedUnimplementedChordServer() {}
 
@@ -88,6 +120,42 @@ func _Chord_GetHashFuncCheckSum_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Chord_GetSuccessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChordServer).GetSuccessor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Chord/GetSuccessor",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChordServer).GetSuccessor(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Chord_FindPredecessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HashKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChordServer).FindPredecessor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Chord/FindPredecessor",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChordServer).FindPredecessor(ctx, req.(*HashKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Chord_ServiceDesc is the grpc.ServiceDesc for Chord service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -99,7 +167,15 @@ var Chord_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetHashFuncCheckSum",
 			Handler:    _Chord_GetHashFuncCheckSum_Handler,
 		},
+		{
+			MethodName: "GetSuccessor",
+			Handler:    _Chord_GetSuccessor_Handler,
+		},
+		{
+			MethodName: "FindPredecessor",
+			Handler:    _Chord_FindPredecessor_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "rpc/chord.proto",
+	Metadata: "pb/chord.proto",
 }

@@ -6,15 +6,32 @@ package pb;
 /*
 protoc --go_out=. --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    rpc/chord.proto
+    pb/chord.proto
 */
 
 service Chord {
+    // Chord Integrity RPCs
     rpc GetHashFuncCheckSum(Empty) returns (HashFuncResponse);
+
+    // Chord Protocol RPCs
+    rpc GetSuccessor(Empty) returns (AddressResponse);
+    rpc FindPredecessor(HashKeyRequest) returns (AddressResponse);
+
+    // Node Joining RPCs
+
+    // Node Leaving RPCs
 }
 
 message Empty {}
 
 message HashFuncResponse {
     string HashVal = 1;
+}
+
+message HashKeyRequest {
+    string HashVal = 1;
+}
+
+message AddressResponse {
+    string Address = 1;
 }
