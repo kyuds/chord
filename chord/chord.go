@@ -1,51 +1,42 @@
 package chord
 
 import (
-	"google.golang.org/grpc"
 	"crypto/sha1"
 	"hash"
 	"time"
+	"google.golang.org/grpc"
 )
 
-// API for Chord Configurations
 type Config struct {
-	// node configs
 	Address string
 	Hash func() hash.Hash
 	Joining bool
 	JoinIP string
-	// Replication int (TODO)
-
-	// gRPC configs
 	ServerOptions []grpc.ServerOption
 	DialOptions []grpc.DialOption
 	Timeout time.Duration
 	MaxIdle time.Duration
 }
 
-func DefaultConfigs(address string, joining bool, join_ip string) *Config {
-	return &Config {
+func DefaultConfigs(address string) *Config {
+	c := &Config {
 		Address: address,
 		Hash: sha1.New,
-		Joining: joining,
-		JoinIP: join_ip,
+		Joining: false,
+		JoinIP: "",
 		// TODO: figure out how to deal with these later. 
 		ServerOptions: nil,
-		DialOptions: nil,
+		DialOptions: make([]grpc.DialOption, 0, 2),
 		Timeout: 10 * time.Millisecond,
 		MaxIdle: 1000 * time.Millisecond,
 	}
+	c.DialOptions = append(c.DialOptions, grpc.WithInsecure(), grpc.WithBlock())
+	return c
 }
 
-// TODO
-// validate IP address, Hash func?
-func (c *Config) validate() error {
-	return nil
-}
-
-// API for Chord Process
-type chordcli struct {
-	chrd *node
+func (c *Config) SetJoinNode(address string) {
+	c.Joining = true
+	c.JoinIP = address
 }
 
 // Initializes the chord client for the user.
@@ -63,25 +54,17 @@ func Initialize(conf *Config) *chordcli {
 	return c
 }
 
-// Puts a key, value pair into the chord
-// network. The key is hashed via SHA1. 
-func (c *chordcli) Put(key, val string) error {
-	return nil
-}
-
 // Looks up the given key and returns the
 // value corresponding to the key. 
 func (c *chordcli) Lookup(key string) (string, error) {
-	return "empty val", nil
-}
-
-// Deletes the value corresponding to the
-// given key. 
-func (c *chordcli) Delete(key string) error {
-	return nil
+	return "no ip address", nil
 }
 
 // Performs a planned exit of the node. 
 func (c *chordcli) Exit() error {
 	return nil
+}
+
+type chordcli struct {
+	chrd *node
 }

@@ -6,12 +6,22 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	//"crypto/sha256"
 	"github.com/kyuds/go-chord/chord"
 )
 
 func main() {
-	conf := chord.DefaultConfigs("localhost:8010")
-	_ = chord.Initialize(conf, true, "localhost:8000")
+	var conf *chord.Config
+
+	if os.Args[1] == "1" {
+		conf = chord.DefaultConfigs("localhost:8000")
+	} else {
+		conf = chord.DefaultConfigs("localhost:8001")
+		conf.SetJoinNode("localhost:8000")
+	}
+
+	//conf.Hash = sha256.New
+	_ = chord.Initialize(conf)
 	for {
 
 	}
@@ -20,7 +30,7 @@ func main() {
 func cli() {
 	jn := flag.NewFlagSet("join", flag.ExitOnError)
 	jnAddr := jn.String("address", "", "IP address for Chord node start on.")
-	jnRing := jn.String("", "", "existing Chord node's IP to join to.")
+	jnRing := jn.String("joinOn", "", "existing Chord node's IP to join to.")
 
 	ct := flag.NewFlagSet("create", flag.ExitOnError)
 	ctAddr := ct.String("address", "", "IP address for Chord node start on.")
@@ -54,11 +64,13 @@ func cli() {
 
 	fmt.Printf("Current node IP: %s\n", node_ip)
 	fmt.Println("\nTo lookup, type 'lookup' followed by a key.")
-	fmt.Println("To put, type 'put' followed by a key and value.")
 	fmt.Print("To quit, type 'quit' and the program will exit.\n\n")
 
 	conf := chord.DefaultConfigs(node_ip)
-	c := chord.Initialize(conf, joining, join_ip)
+	if joining {
+		conf.SetJoinNode(join_ip)
+	}
+	c := chord.Initialize(conf)
 
 	cli := bufio.NewReader(os.Stdin)
 	loop: for {
@@ -76,14 +88,6 @@ func cli() {
 		case "lookup":
 			if (len(args) == 2) {
 				_, _ = c.Lookup(args[1])
-			}
-		case "put":
-			if (len(args) == 3) {
-				_ = c.Put(args[1], args[2])
-			}
-		case "delete":
-			if (len(args) == 2) {
-				_ = c.Delete(args[1])
 			}
 		case "quit":
 			break loop

@@ -11,9 +11,9 @@ type node struct {
 	// chord node settings
 	id string
 	ip string
-	hashLen int
 	hf func() hash.Hash
 	ft fingertable
+	ftLen int
 
 	// grpc
 	pb.UnimplementedChordServer
@@ -28,8 +28,8 @@ func newNode(conf *Config) (*node, error) {
 	n := &node{
 		id: getHash(conf.Hash, conf.Address),
 		ip: conf.Address,
-		hashLen: conf.Hash().Size(),
 		hf: conf.Hash,
+		ftLen: conf.Hash().Size(),
 	}
 
 	// set up finger table

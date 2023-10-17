@@ -33,6 +33,7 @@ type rpcLayer struct {
 	poolLock sync.RWMutex
 	timeout time.Duration
 	maxidle time.Duration
+	dialOptions []grpc.DialOption
 	shutdown int32
 }
 
@@ -48,10 +49,11 @@ func newRPC(conf *Config) (*rpcLayer, error) {
 	if err != nil { return nil, err }
 	r := &rpcLayer {
 		listener: lis.(*net.TCPListener),
-		server: grpc.NewServer(/*conf.ServerOptions...*/),
+		server: grpc.NewServer(conf.ServerOptions...),
 		pool: make(map[string]*gConn),
 		timeout: conf.Timeout,
 		maxidle: conf.MaxIdle,
+		dialOptions: conf.DialOptions,
 		shutdown: 0,
 	}
 	return r, nil
@@ -110,7 +112,7 @@ func (r *rpcLayer) getClient(address string) (pb.ChordClient, error) {
 		return gconn.client, nil
 	}
 
-	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(address, r.dialOptions...)
 	if err != nil { return nil, err }
 
 	client := pb.NewChordClient(conn)
