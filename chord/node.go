@@ -165,21 +165,32 @@ func (n *node) closestPrecedingFinger(key string) string {
 // chord extended concurrent logic
 func (n *node) stabilize() {
 	succ := n.ft.getSuccessor()
+	var pred string
+	var err error
 	if succ == n.ip {
-		return
-	}
-	pred, err := n.rpc.getPredecessor(succ)
-	if err != nil {
-		fmt.Println(err)
+		pred = n.predecessor
+	} else {
+		pred, err = n.rpc.getPredecessor(succ)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 	if pred != "" && bigBetween(bigify(n.ip), bigify(succ), bigify(pred)) {
 		succ = pred
+		n.ft.lock.Lock()
+		defer n.ft.lock.Unlock()
+		// we need to set our successor to the appropriate val. 
+		n.ft.get(0).ipaddr = succ
+		n.ft.get(0).iphash = getHash(n.hf, succ)
 	}
-	n.rpc.notify(succ, n.ip)
+	if succ != n.ip {
+		n.rpc.notify(succ, n.ip)
+	}
 }
 
 func (n *node) fixFinger(i int) int{
 	find := n.ft.get(i).id
+	// need to fix this part!!
 	succ, err := n.findSuccessor(hex.EncodeToString(find.Bytes()))
 	if err != nil {
 		fmt.Println("error in fixing fingertable")
