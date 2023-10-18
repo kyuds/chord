@@ -233,12 +233,13 @@ func (n *node) GetPredecessor(ctx context.Context, r *pb.Empty) (*pb.AddressResp
 }
 
 func (n *node) Notify(ctx context.Context, r *pb.AddressRequest) (*pb.Empty, error) {
-	a := r.Address
-	
-	if n.predecessor == "" || bigBetween(bigify(n.predecessor), bigify(n.ip), bigify(a)) {
-		n.predecessor = a
-	}
+	t1 := bigify(getHash(n.hf, n.predecessor))
+	t2 := bigify(getHash(n.hf, n.ip))
+	t3 := bigify(getHash(n.hf, r.Address))
 
+	if n.predecessor == "" || bigBetween(t1, t2, t3) {
+		n.predecessor = r.Address
+	}
 	return &pb.Empty{}, nil
 }
 
