@@ -12,10 +12,34 @@ protoc --go_out=. --go_opt=paths=source_relative \
 service Chord {
     // Chord Integrity RPCs
     rpc GetHashFuncCheckSum(Empty) returns (HashFuncResponse);
+
+    // Chord Protocol RPCs
+    rpc GetSuccessor(Empty) returns (AddressResponse);
+    rpc ClosestPrecedingFinger(HashKeyRequest) returns (AddressResponse);
+
+    // Node Joining RPCs
+    rpc FindSuccessor(HashKeyRequest) returns (AddressResponse);
+    rpc GetPredecessor(Empty) returns (AddressResponse);
+    rpc Notify(AddressRequest) returns (Empty);
+
+    // Node Failure Handling RPCs
+    rpc CheckPredecessor(Empty) returns (Empty);
 }
 
 message Empty {}
 
 message HashFuncResponse {
     string HexHashValue = 1;
+}
+
+message HashKeyRequest {
+    string HexHashValue = 1;
+}
+
+message AddressResponse {
+    string Address = 1;
+}
+
+message AddressRequest {
+    string Address = 2;
 }

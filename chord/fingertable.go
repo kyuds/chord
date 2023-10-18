@@ -43,10 +43,6 @@ func (f *fingerTable) get(i int) *fingerEntry {
 	return f.tb[i]
 }
 
-func (f *fingerTable) getSuccessor() string {
-	return f.tb[0].ipaddr
-}
-
 func (f *fingerTable) printself() {
 	for _, i := range f.tb {
 		fmt.Print(i.id)

@@ -1,6 +1,7 @@
 package chord
 
 import (
+	"context"
 	"fmt"
 	"hash"
 	"sync"
@@ -10,9 +11,11 @@ import (
 
 type node struct {
 	// chord node settings
-	id       string
-	ip       string
-	hf       func() hash.Hash
+	id string
+	ip string
+	hf func() hash.Hash
+
+	// successors predecessors
 	repli    int
 	succ     *successors
 	succLock sync.RWMutex
@@ -37,7 +40,7 @@ func initialize(conf *Config) (*node, error) {
 
 	n.ft = initFingerTable(n.id, n.ip, n.ftLen)
 	n.pred = ""
-	n.succ = createSuccessorQueue()
+	n.succ = createSuccessorQueue(n.ip)
 
 	// start RPC server: register chord server; start rpc server
 	tmpRPC, err := newRPC(conf)
@@ -59,15 +62,14 @@ func initialize(conf *Config) (*node, error) {
 	// background processes
 	// stabilize
 	go func() {
+		// check predecessor existence --> clear predecessor if so
+		// clear out all ft table whenever node is determined to be not active
+		// normal stabilization process.
+		// update successors accordingly --> always maintain correct queue.
 
 	}()
 
 	// fix fingers
-	go func() {
-
-	}()
-
-	// check predecessor
 	go func() {
 
 	}()
@@ -97,10 +99,7 @@ func (n *node) findSuccessor(hashedKey string) (string, error) {
 	}
 
 	if pred == n.ip {
-		if n.succ.empty() {
-			return n.ip, nil
-		}
-		return n.succ.get(0), nil
+		return n.succ.getSuccessor(), nil
 	}
 
 	// succ, err := n.rpc.getSuccessor(pred)
@@ -114,13 +113,13 @@ func (n *node) findSuccessor(hashedKey string) (string, error) {
 
 func (n *node) findPredecessor(hashed string) (string, error) {
 	curr := n.ip
-	succ := n.ft.getSuccessor()
+	succ := n.succ.getSuccessor()
 	bigKey := bigify(hashed)
 	//var err error
 
 	for {
 		if curr == n.ip {
-			succ = n.ft.getSuccessor()
+			succ = n.succ.getSuccessor()
 		} else {
 			// succ, err = n.rpc.getSuccessor(curr)
 			// if err != nil {
@@ -157,4 +156,48 @@ func (n *node) closestPrecedingFinger(hashed string) string {
 		}
 	}
 	return n.ip
+}
+
+// gRPC Server (chord_grpc.pb.go) Implementation
+func (n *node) GetHashFuncCheckSum(ctx context.Context, r *pb.Empty) (*pb.HashFuncResponse, error) {
+	hashValue := getFuncHash(n.hf)
+	return &pb.HashFuncResponse{HexHashValue: hashValue}, nil
+}
+
+func (n *node) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
+	return &pb.AddressResponse{Address: n.succ.getSuccessor()}, nil
+}
+
+func (n *node) ClosestPrecedingFinger(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
+	a := n.closestPrecedingFinger(r.HexHashValue)
+	return &pb.AddressResponse{Address: a}, nil
+}
+
+func (n *node) FindSuccessor(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
+	a, err := n.findSuccessor(r.HexHashValue)
+	if err != nil {
+		return &pb.AddressResponse{Address: ""}, nil
+	}
+	return &pb.AddressResponse{Address: a}, nil
+}
+
+func (n *node) GetPredecessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
+	return &pb.AddressResponse{Address: n.pred}, nil
+}
+
+func (n *node) Notify(ctx context.Context, r *pb.AddressRequest) (*pb.Empty, error) {
+	t1 := bigify(getHash(n.hf, n.pred))
+	t2 := bigify(getHash(n.hf, n.ip))
+	t3 := bigify(getHash(n.hf, r.Address))
+
+	if n.pred == "" || bigBetween(t1, t2, t3) {
+		n.predLock.Lock()
+		n.pred = r.Address
+		n.predLock.Unlock()
+	}
+	return &pb.Empty{}, nil
+}
+
+func (n *node) CheckPredecessor(ctx context.Context, r *pb.Empty) (*pb.Empty, error) {
+	return &pb.Empty{}, nil
 }

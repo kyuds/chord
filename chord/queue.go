@@ -1,11 +1,15 @@
 package chord
 
 type successors struct {
+	ip   string
 	data []string
 }
 
-func createSuccessorQueue() *successors {
-	return &successors{data: make([]string, 0)}
+func createSuccessorQueue(ownIP string) *successors {
+	return &successors{
+		ip:   ownIP,
+		data: make([]string, 0),
+	}
 }
 
 func (q *successors) push(address string) {
@@ -28,4 +32,11 @@ func (q *successors) length() int {
 
 func (q *successors) empty() bool {
 	return len(q.data) == 0
+}
+
+func (q *successors) getSuccessor() string {
+	if q.empty() {
+		return q.ip
+	}
+	return q.get(0)
 }

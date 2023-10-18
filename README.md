@@ -23,6 +23,8 @@ Joining a Chord Ring:
 ./go-chord join --address="localhost:8001" --join="localhost:8000"
 ```
 
+git push origin v2-scratch-build
+
 ### Development Plan
 - Create a successor queue implemented Chord without finger table
 - Check and implement fault tolerance

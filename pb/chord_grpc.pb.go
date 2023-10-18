@@ -24,6 +24,15 @@ const _ = grpc.SupportPackageIsVersion7
 type ChordClient interface {
 	// Chord Integrity RPCs
 	GetHashFuncCheckSum(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*HashFuncResponse, error)
+	// Chord Protocol RPCs
+	GetSuccessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AddressResponse, error)
+	ClosestPrecedingFinger(ctx context.Context, in *HashKeyRequest, opts ...grpc.CallOption) (*AddressResponse, error)
+	// Node Joining RPCs
+	FindSuccessor(ctx context.Context, in *HashKeyRequest, opts ...grpc.CallOption) (*AddressResponse, error)
+	GetPredecessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AddressResponse, error)
+	Notify(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*Empty, error)
+	// Node Failure Handling RPCs
+	CheckPredecessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type chordClient struct {
@@ -43,12 +52,75 @@ func (c *chordClient) GetHashFuncCheckSum(ctx context.Context, in *Empty, opts .
 	return out, nil
 }
 
+func (c *chordClient) GetSuccessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AddressResponse, error) {
+	out := new(AddressResponse)
+	err := c.cc.Invoke(ctx, "/pb.Chord/GetSuccessor", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chordClient) ClosestPrecedingFinger(ctx context.Context, in *HashKeyRequest, opts ...grpc.CallOption) (*AddressResponse, error) {
+	out := new(AddressResponse)
+	err := c.cc.Invoke(ctx, "/pb.Chord/ClosestPrecedingFinger", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chordClient) FindSuccessor(ctx context.Context, in *HashKeyRequest, opts ...grpc.CallOption) (*AddressResponse, error) {
+	out := new(AddressResponse)
+	err := c.cc.Invoke(ctx, "/pb.Chord/FindSuccessor", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chordClient) GetPredecessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AddressResponse, error) {
+	out := new(AddressResponse)
+	err := c.cc.Invoke(ctx, "/pb.Chord/GetPredecessor", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chordClient) Notify(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/pb.Chord/Notify", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chordClient) CheckPredecessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/pb.Chord/CheckPredecessor", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ChordServer is the server API for Chord service.
 // All implementations must embed UnimplementedChordServer
 // for forward compatibility
 type ChordServer interface {
 	// Chord Integrity RPCs
 	GetHashFuncCheckSum(context.Context, *Empty) (*HashFuncResponse, error)
+	// Chord Protocol RPCs
+	GetSuccessor(context.Context, *Empty) (*AddressResponse, error)
+	ClosestPrecedingFinger(context.Context, *HashKeyRequest) (*AddressResponse, error)
+	// Node Joining RPCs
+	FindSuccessor(context.Context, *HashKeyRequest) (*AddressResponse, error)
+	GetPredecessor(context.Context, *Empty) (*AddressResponse, error)
+	Notify(context.Context, *AddressRequest) (*Empty, error)
+	// Node Failure Handling RPCs
+	CheckPredecessor(context.Context, *Empty) (*Empty, error)
 	mustEmbedUnimplementedChordServer()
 }
 
@@ -58,6 +130,24 @@ type UnimplementedChordServer struct {
 
 func (UnimplementedChordServer) GetHashFuncCheckSum(context.Context, *Empty) (*HashFuncResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetHashFuncCheckSum not implemented")
+}
+func (UnimplementedChordServer) GetSuccessor(context.Context, *Empty) (*AddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSuccessor not implemented")
+}
+func (UnimplementedChordServer) ClosestPrecedingFinger(context.Context, *HashKeyRequest) (*AddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClosestPrecedingFinger not implemented")
+}
+func (UnimplementedChordServer) FindSuccessor(context.Context, *HashKeyRequest) (*AddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FindSuccessor not implemented")
+}
+func (UnimplementedChordServer) GetPredecessor(context.Context, *Empty) (*AddressResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPredecessor not implemented")
+}
+func (UnimplementedChordServer) Notify(context.Context, *AddressRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Notify not implemented")
+}
+func (UnimplementedChordServer) CheckPredecessor(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckPredecessor not implemented")
 }
 func (UnimplementedChordServer) mustEmbedUnimplementedChordServer() {}
 
@@ -90,6 +180,114 @@ func _Chord_GetHashFuncCheckSum_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Chord_GetSuccessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChordServer).GetSuccessor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Chord/GetSuccessor",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChordServer).GetSuccessor(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Chord_ClosestPrecedingFinger_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HashKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChordServer).ClosestPrecedingFinger(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Chord/ClosestPrecedingFinger",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChordServer).ClosestPrecedingFinger(ctx, req.(*HashKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Chord_FindSuccessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HashKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChordServer).FindSuccessor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Chord/FindSuccessor",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChordServer).FindSuccessor(ctx, req.(*HashKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Chord_GetPredecessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChordServer).GetPredecessor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Chord/GetPredecessor",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChordServer).GetPredecessor(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Chord_Notify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddressRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChordServer).Notify(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Chord/Notify",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChordServer).Notify(ctx, req.(*AddressRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Chord_CheckPredecessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChordServer).CheckPredecessor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Chord/CheckPredecessor",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChordServer).CheckPredecessor(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Chord_ServiceDesc is the grpc.ServiceDesc for Chord service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -100,6 +298,30 @@ var Chord_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetHashFuncCheckSum",
 			Handler:    _Chord_GetHashFuncCheckSum_Handler,
+		},
+		{
+			MethodName: "GetSuccessor",
+			Handler:    _Chord_GetSuccessor_Handler,
+		},
+		{
+			MethodName: "ClosestPrecedingFinger",
+			Handler:    _Chord_ClosestPrecedingFinger_Handler,
+		},
+		{
+			MethodName: "FindSuccessor",
+			Handler:    _Chord_FindSuccessor_Handler,
+		},
+		{
+			MethodName: "GetPredecessor",
+			Handler:    _Chord_GetPredecessor_Handler,
+		},
+		{
+			MethodName: "Notify",
+			Handler:    _Chord_Notify_Handler,
+		},
+		{
+			MethodName: "CheckPredecessor",
+			Handler:    _Chord_CheckPredecessor_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
