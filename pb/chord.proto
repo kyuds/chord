@@ -22,7 +22,8 @@ service Chord {
     rpc GetPredecessor(Empty) returns (AddressResponse);
     rpc Notify(AddressRequest) returns (Empty);
 
-    // Node Leaving RPCs
+    // Node Failure Handling RPCs
+    rpc CheckPredecessor(Empty) returns (Empty);
 }
 
 message Empty {}

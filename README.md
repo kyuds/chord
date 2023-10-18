@@ -11,6 +11,9 @@ All of the relevant APIs are in `chord/chord.go` which includes Chord configurat
 initialization, lookups, and planned exits. Please try out the `example.go` file to see 
 a live version of a Chord ring in action. 
 
+Currently this version of Chord does not support node failures. It does handle concurrent 
+joins though. 
+
 Creating a Chord Ring:
 ```
 ./go-chord create --address="localhost:8000"
@@ -19,3 +22,8 @@ Joining a Chord Ring:
 ```
 ./go-chord join --address="localhost:8001" --join="localhost:8000"
 ```
+
+### TODO:
+- [X] Deal with concurrent joins
+- [ ] How to deal with failed nodes
+- [ ] Rewrite codebase based on lessons learned

@@ -27,6 +27,9 @@ type rpc interface {
 	findSuccessor(string, string) (string, error)
 	getPredecessor(string) (string, error)
 	notify(string, string) error
+
+	// failure
+	checkPredecessor(string) error
 }
 
 type rpcLayer struct {
@@ -116,7 +119,9 @@ func (r *rpcLayer) getClient(address string) (pb.ChordClient, error) {
 	}
 
 	conn, err := grpc.Dial(address, r.dialOptions...)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	client := pb.NewChordClient(conn)
 	gconn = &gConn{
@@ -140,7 +145,9 @@ func (r *rpcLayer) getHashFuncCheckSum(address string) (string, error) {
 	defer cancel()
 
 	res, err := client.GetHashFuncCheckSum(ctx, &pb.Empty{})
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	return res.HashVal, nil
 }
@@ -153,7 +160,9 @@ func (r *rpcLayer) getSuccessor(address string) (string, error) {
 	defer cancel()
 
 	res, err := client.GetSuccessor(ctx, &pb.Empty{})
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	return res.Address, nil
 }
@@ -166,7 +175,9 @@ func (r *rpcLayer) closestPrecedingFinger(address, key string) (string, error) {
 	defer cancel()
 
 	res, err := client.ClosestPrecedingFinger(ctx, &pb.KeyRequest{Key: key})
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	return res.Address, nil
 }
@@ -179,7 +190,9 @@ func (r *rpcLayer) findSuccessor(address, key string) (string, error) {
 	defer cancel()
 
 	res, err := client.FindSuccessor(ctx, &pb.KeyRequest{Key: key})
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	return res.Address, nil
 }
@@ -192,7 +205,9 @@ func (r *rpcLayer) getPredecessor(address string) (string, error) {
 	defer cancel()
 
 	res, err := client.GetPredecessor(ctx, &pb.Empty{})
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	return res.Address, nil
 }
@@ -205,7 +220,18 @@ func (r *rpcLayer) notify(address, key string) error {
 	defer cancel()
 
 	_, err = client.Notify(ctx, &pb.AddressRequest{Address: key})
-	if err != nil { return err }
+	if err != nil {
+	}
+	return err
+}
 
-	return nil
+func (r *rpcLayer) checkPredecessor(address string) error {
+	client, err := r.getClient(address)
+	if err != nil { return err }
+	
+	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
+	defer cancel()
+
+	_, err = client.CheckPredecessor(ctx, &pb.Empty{})
+	return err
 }

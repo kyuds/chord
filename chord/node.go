@@ -54,7 +54,7 @@ func newNode(conf *Config) (*node, error) {
 
 	// run background:
 	go func() {
-		ticker := time.NewTicker(2 * time.Second)
+		ticker := time.NewTicker(1 * time.Second)
 		for {
 			select {
 			case <-ticker.C:
@@ -83,7 +83,16 @@ func newNode(conf *Config) (*node, error) {
 			}
 		}
 	}()
-	// - check predecessor
+	
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		for {
+			select {
+			case <- ticker.C:
+				n.checkPredecessor()
+			}
+		}
+	}()
 
 	return n, nil
 }
@@ -117,7 +126,10 @@ func (n *node) findSuccessor(hashed string) (string, error) {
 	}
 
 	succ, err := n.rpc.getSuccessor(pred)
-	if err != nil { return "", err }
+	if err != nil {
+		n.ft.invalidateAddress(pred)
+		return "", err
+	}
 	return succ, nil
 }
 
@@ -132,7 +144,10 @@ func (n *node) findPredecessor(hashed string) (string, error) {
 			succ = n.ft.getSuccessor()
 		} else {
 			succ, err = n.rpc.getSuccessor(curr)
-			if err != nil { return "", err }
+			if err != nil {
+				n.ft.invalidateAddress(curr)
+				return "", err
+			}
 		}
 		if bigBetweenRightInclude(bigify(getHash(n.hf, curr)), bigify(getHash(n.hf, succ)), bigKey) {
 			break
@@ -141,7 +156,10 @@ func (n *node) findPredecessor(hashed string) (string, error) {
 			curr = n.closestPrecedingFinger(hashed)
 		} else {
 			curr, err = n.rpc.closestPrecedingFinger(curr, hashed)
-			if err != nil { return "", err }
+			if err != nil {
+				n.ft.invalidateAddress(curr)
+				return "", err
+			}
 		}
 	}
 	return curr, nil
@@ -171,8 +189,10 @@ func (n *node) stabilize() {
 		pred = n.predecessor
 	} else {
 		pred, err = n.rpc.getPredecessor(succ)
+		// fix broadcast
 		if err != nil {
-			fmt.Println(err)
+			//fmt.Println(err)
+			n.ft.invalidateAddress(succ)
 		}
 	}
 
@@ -189,12 +209,14 @@ func (n *node) stabilize() {
 		n.ft.get(0).iphash = getHash(n.hf, succ)
 	}
 	if succ != n.ip {
-		n.rpc.notify(succ, n.ip)
+		err = n.rpc.notify(succ, n.ip)
+		if err != nil {
+			n.ft.invalidateAddress(succ)
+		}
 	}
 }
 
 func (n *node) fixFinger(i int) int{
-	i = i + 1
 	f := n.ft.get(i)
 	succ, err := n.findSuccessor(hex.EncodeToString(f.id.Bytes()))
 	if err != nil {
@@ -207,7 +229,18 @@ func (n *node) fixFinger(i int) int{
 	f.iphash = getHash(n.hf, succ)
 	f.valid = true
 
-	return i % (n.ftLen - 1)
+	return (i + 1) % n.ftLen
+}
+
+// recovery
+func (n *node) checkPredecessor() {
+	err := n.rpc.checkPredecessor(n.predecessor)
+	if err != nil {
+		n.ft.invalidateAddress(n.predecessor)
+		n.predLock.Lock()
+		n.predecessor = ""
+		n.predLock.Unlock()
+	}
 }
 
 // gRPC Server (chord_grpc.pb.go) Implementation
@@ -241,8 +274,14 @@ func (n *node) Notify(ctx context.Context, r *pb.AddressRequest) (*pb.Empty, err
 	t3 := bigify(getHash(n.hf, r.Address))
 
 	if n.predecessor == "" || bigBetween(t1, t2, t3) {
+		n.predLock.Lock()
 		n.predecessor = r.Address
+		n.predLock.Unlock()
 	}
+	return &pb.Empty{}, nil
+}
+
+func (n *node) CheckPredecessor(ctx context.Context, r *pb.Empty) (*pb.Empty, error) {
 	return &pb.Empty{}, nil
 }
 

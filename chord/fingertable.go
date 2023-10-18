@@ -57,3 +57,13 @@ func (f *fingerTable) printself() {
 		fmt.Println(i.valid)
 	}
 }
+
+func (f *fingerTable) invalidateAddress(address string) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	for _, finger := range f.tb {
+		if finger.ipaddr == address {
+			finger.valid = false
+		}
+	}
+}

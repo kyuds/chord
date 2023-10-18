@@ -60,3 +60,26 @@ func bigBetween(x, y, key *big.Int) bool {
 func bigBetweenRightInclude(x, y, key *big.Int) bool {
 	return bigBetween(x, y, key) || y.Cmp(key) == 0
 }
+
+// for "r" number of successors
+type queue struct {
+	data []string
+}
+
+func create() *queue {
+	return &queue{ data: make([]string, 0) }
+}
+
+func (q *queue) push(address string) {
+	q.data = append(q.data, address)
+}
+
+func (q *queue) pop() string {
+	d := q.data[0]
+	q.data = q.data[1:]
+	return d
+}
+
+func (q *queue) length() int {
+	return len(q.data)
+}
