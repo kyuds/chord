@@ -37,7 +37,8 @@ func (c *Config) validate() error {
 
 // math/big std library abstractions
 func bigify(hashed string) *big.Int {
-	return new(big.Int).SetBytes([]byte(hashed))
+	h, _ := hex.DecodeString(hashed)
+	return new(big.Int).SetBytes(h)
 }
 
 func bigPow(x, y int) *big.Int {

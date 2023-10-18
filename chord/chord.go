@@ -89,7 +89,8 @@ func Initialize(conf *Config) *chordcli {
 // Looks up the given key and returns the
 // node's address responsible for the key. 
 func (c *chordcli) Lookup(key string) (string, error) {
-	ip, err := c.chrd.findSuccessor(key)
+	k := getHash(c.chrd.hf, key)
+	ip, err := c.chrd.findSuccessor(k)
 	if err != nil { return "", err }
 	return ip, nil
 }

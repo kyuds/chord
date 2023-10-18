@@ -49,6 +49,14 @@ func (f *fingerTable) getSuccessor() string {
 }
 
 func (f *fingerTable) printself() {
+	i := f.tb[0]
+	fmt.Print(i.id)
+	fmt.Print(" ")
+	fmt.Print(i.ipaddr)
+	fmt.Print(" ")
+	fmt.Println(i.valid)
+
+	/*
 	for _, i := range f.tb {
 		fmt.Print(i.id)
 		fmt.Print(" ")
@@ -56,4 +64,5 @@ func (f *fingerTable) printself() {
 		fmt.Print(" ")
 		fmt.Println(i.valid)
 	}
+	*/
 }

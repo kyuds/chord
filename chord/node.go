@@ -54,7 +54,7 @@ func newNode(conf *Config) (*node, error) {
 
 	// run background:
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := time.NewTicker(2 * time.Second)
 		for {
 			select {
 			case <-ticker.C:
@@ -69,12 +69,12 @@ func newNode(conf *Config) (*node, error) {
 	}()
 	
 	go func() {
-		next := 0
-		ticker := time.NewTicker(100 * time.Millisecond)
+		//next := 0
+		ticker := time.NewTicker(1 * time.Second)
 		for {
 			select {
 			case <-ticker.C:
-				next = n.fixFinger(next)
+				//next = n.fixFinger(next)
 			/*
 			case <-node.shutdownCh:
 				ticker.Stop()
@@ -108,8 +108,8 @@ func (n *node) joinNode(address string) error {
 }
 
 // predecessor and successor operations (Chord p.5)
-func (n *node) findSuccessor(key string) (string, error) {
-	pred, err := n.findPredecessor(key)
+func (n *node) findSuccessor(hashed string) (string, error) {
+	pred, err := n.findPredecessor(hashed)
 	if err != nil { return "", err }
 
 	if pred == n.ip {
@@ -121,10 +121,10 @@ func (n *node) findSuccessor(key string) (string, error) {
 	return succ, nil
 }
 
-func (n *node) findPredecessor(key string) (string, error) {
+func (n *node) findPredecessor(hashed string) (string, error) {
 	curr := n.ip
 	succ := n.ft.getSuccessor()
-	bigKey := bigify(getHash(n.hf, key))
+	bigKey := bigify(hashed)
 	var err error
 
 	for {
@@ -134,29 +134,29 @@ func (n *node) findPredecessor(key string) (string, error) {
 			succ, err = n.rpc.getSuccessor(curr)
 			if err != nil { return "", err }
 		}
-		if bigBetweenRightInclude(bigify(curr), bigify(succ), bigKey) {
+		if bigBetweenRightInclude(bigify(getHash(n.hf, curr)), bigify(getHash(n.hf, succ)), bigKey) {
 			break
 		}
 		if curr == n.ip {
-			curr = n.closestPrecedingFinger(key)
+			curr = n.closestPrecedingFinger(hashed)
 		} else {
-			curr, err = n.rpc.closestPrecedingFinger(curr, key)
+			curr, err = n.rpc.closestPrecedingFinger(curr, hashed)
 			if err != nil { return "", err }
 		}
 	}
-
 	return curr, nil
 }
 
-func (n *node) closestPrecedingFinger(key string) string {
-	c1 := bigify(n.ip)
-	c2 := bigify(getHash(n.hf, key))
+func (n *node) closestPrecedingFinger(hashed string) string {
+	c1 := bigify(n.id)
+	c2 := bigify(hashed)
 	for i := n.ftLen - 1; i >= 0; i-- {
-		if !n.ft.get(i).valid {
+		f := n.ft.get(i)
+		if !f.valid {
 			continue
 		}
-		if bigBetween(c1, c2, n.ft.get(i).id) {
-			return n.ft.get(i).ipaddr
+		if bigBetween(c1, c2, f.id) {
+			return f.ipaddr
 		}
 	}
 	return n.ip
@@ -175,7 +175,7 @@ func (n *node) stabilize() {
 			fmt.Println(err)
 		}
 	}
-	if pred != "" && bigBetween(bigify(n.ip), bigify(succ), bigify(pred)) {
+	if pred != "" && bigBetween(bigify(getHash(n.hf, n.ip)), bigify(getHash(n.hf, succ)), bigify(getHash(n.hf, pred))) {
 		succ = pred
 		n.ft.lock.Lock()
 		defer n.ft.lock.Unlock()
@@ -188,9 +188,11 @@ func (n *node) stabilize() {
 	}
 }
 
+// not being called yet.
+// taking the O(n) approach to find queries at the moment. 
 func (n *node) fixFinger(i int) int{
 	find := n.ft.get(i).id
-	// need to fix this part!!
+	// TODO: need to fix this part!!
 	succ, err := n.findSuccessor(hex.EncodeToString(find.Bytes()))
 	if err != nil {
 		fmt.Println("error in fixing fingertable")
@@ -221,7 +223,7 @@ func (n *node) ClosestPrecedingFinger(ctx context.Context, r *pb.KeyRequest) (*p
 }
 
 func (n *node) FindSuccessor(ctx context.Context, r *pb.KeyRequest) (*pb.AddressResponse, error) {
-	a, err := n.findSuccessor(r.Key)
+	a, err := n.findSuccessor(getHash(n.hf, r.Key))
 	if err != nil { return &pb.AddressResponse{Address: ""}, nil }
 	return &pb.AddressResponse{Address: a}, nil
 }
