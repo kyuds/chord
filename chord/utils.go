@@ -15,14 +15,14 @@ import (
 // used in Chord to ensure that all nodes share
 // the same hash function.
 // ex: hash "crypto/sha1.New":
-//     getFuncHash(sha1.New) -> a6f0f8d9a226b2c8f385aed3583d14c3c0743629
+// getFuncHash(sha1.New) -> a6f0f8d9a226b2c8f385aed3583d14c3c0743629
 func getFuncHash(i interface{}) string {
 	funcName := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 	checkSum := sha1.Sum([]byte(funcName))
 	return hex.EncodeToString(checkSum[:])
 }
 
-// use hash function to convert key to hashed string. 
+// use hash function to convert key to hashed hex string
 func getHash(h func() hash.Hash, key string) string {
 	hasher := h()
 	hasher.Write([]byte(key))
@@ -30,12 +30,7 @@ func getHash(h func() hash.Hash, key string) string {
 	return hex.EncodeToString(checkSum[:])
 }
 
-// TODO: validate IP address
-func (c *Config) validate() error {
-	return nil
-}
-
-// math/big std library abstractions
+// math/big library abstractions
 func bigify(hashed string) *big.Int {
 	h, _ := hex.DecodeString(hashed)
 	return new(big.Int).SetBytes(h)
@@ -59,27 +54,4 @@ func bigBetween(x, y, key *big.Int) bool {
 
 func bigBetweenRightInclude(x, y, key *big.Int) bool {
 	return bigBetween(x, y, key) || y.Cmp(key) == 0
-}
-
-// for "r" number of successors
-type queue struct {
-	data []string
-}
-
-func create() *queue {
-	return &queue{ data: make([]string, 0) }
-}
-
-func (q *queue) push(address string) {
-	q.data = append(q.data, address)
-}
-
-func (q *queue) pop() string {
-	d := q.data[0]
-	q.data = q.data[1:]
-	return d
-}
-
-func (q *queue) length() int {
-	return len(q.data)
 }

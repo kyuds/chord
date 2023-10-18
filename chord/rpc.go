@@ -7,60 +7,51 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"google.golang.org/grpc"
+
 	"github.com/kyuds/go-chord/pb"
+	"google.golang.org/grpc"
 )
 
 // Connection/Communication Management
-// Creating a pool server for gRPC connections. 
+// Creating a pool server for gRPC connections.
 type rpc interface {
 	// setup
 	start() error
 	stop() error
 	getHashFuncCheckSum(string) (string, error)
-
-	// chord
-	getSuccessor(string) (string, error)
-	closestPrecedingFinger(string, string) (string, error)
-
-	// join
-	findSuccessor(string, string) (string, error)
-	getPredecessor(string) (string, error)
-	notify(string, string) error
-
-	// failure
-	checkPredecessor(string) error
 }
 
 type rpcLayer struct {
-	listener *net.TCPListener
-	server *grpc.Server
-	pool map[string]*gConn
-	poolLock sync.RWMutex
-	timeout time.Duration
-	maxidle time.Duration
+	listener    *net.TCPListener
+	server      *grpc.Server
+	pool        map[string]*gConn
+	poolLock    sync.RWMutex
+	timeout     time.Duration
+	maxidle     time.Duration
 	dialOptions []grpc.DialOption
-	shutdown int32
+	shutdown    int32
 }
 
 type gConn struct {
-	address string
-	client pb.ChordClient
-	conn *grpc.ClientConn
+	address    string
+	client     pb.ChordClient
+	conn       *grpc.ClientConn
 	lastActive time.Time
 }
 
 func newRPC(conf *Config) (*rpcLayer, error) {
 	lis, err := net.Listen("tcp", conf.Address)
-	if err != nil { return nil, err }
-	r := &rpcLayer {
-		listener: lis.(*net.TCPListener),
-		server: grpc.NewServer(conf.ServerOptions...),
-		pool: make(map[string]*gConn),
-		timeout: conf.Timeout,
-		maxidle: conf.MaxIdle,
+	if err != nil {
+		return nil, err
+	}
+	r := &rpcLayer{
+		listener:    lis.(*net.TCPListener),
+		server:      grpc.NewServer(conf.ServerOptions...),
+		pool:        make(map[string]*gConn),
+		timeout:     conf.Timeout,
+		maxidle:     conf.MaxIdle,
 		dialOptions: conf.DialOptions,
-		shutdown: 0,
+		shutdown:    0,
 	}
 	return r, nil
 }
@@ -125,9 +116,9 @@ func (r *rpcLayer) getClient(address string) (pb.ChordClient, error) {
 
 	client := pb.NewChordClient(conn)
 	gconn = &gConn{
-		address: address,
-		client: client,
-		conn: conn,
+		address:    address,
+		client:     client,
+		conn:       conn,
 		lastActive: time.Now(),
 	}
 	r.poolLock.Lock()
@@ -139,8 +130,10 @@ func (r *rpcLayer) getClient(address string) (pb.ChordClient, error) {
 // gRPC Abstraction
 func (r *rpcLayer) getHashFuncCheckSum(address string) (string, error) {
 	client, err := r.getClient(address)
-	if err != nil { return "", err }
-	
+	if err != nil {
+		return "", err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
@@ -149,89 +142,5 @@ func (r *rpcLayer) getHashFuncCheckSum(address string) (string, error) {
 		return "", err
 	}
 
-	return res.HashVal, nil
-}
-
-func (r *rpcLayer) getSuccessor(address string) (string, error) {
-	client, err := r.getClient(address)
-	if err != nil { return "", err }
-	
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-
-	res, err := client.GetSuccessor(ctx, &pb.Empty{})
-	if err != nil {
-		return "", err
-	}
-
-	return res.Address, nil
-}
-
-func (r *rpcLayer) closestPrecedingFinger(address, key string) (string, error) {
-	client, err := r.getClient(address)
-	if err != nil { return "", err }
-	
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-
-	res, err := client.ClosestPrecedingFinger(ctx, &pb.KeyRequest{Key: key})
-	if err != nil {
-		return "", err
-	}
-
-	return res.Address, nil
-}
-
-func (r *rpcLayer) findSuccessor(address, key string) (string, error) {
-	client, err := r.getClient(address)
-	if err != nil { return "", err }
-	
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-
-	res, err := client.FindSuccessor(ctx, &pb.KeyRequest{Key: key})
-	if err != nil {
-		return "", err
-	}
-
-	return res.Address, nil
-}
-
-func (r *rpcLayer) getPredecessor(address string) (string, error) {
-	client, err := r.getClient(address)
-	if err != nil { return "", err }
-	
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-
-	res, err := client.GetPredecessor(ctx, &pb.Empty{})
-	if err != nil {
-		return "", err
-	}
-
-	return res.Address, nil
-}
-
-func (r *rpcLayer) notify(address, key string) error {
-	client, err := r.getClient(address)
-	if err != nil { return err }
-	
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-
-	_, err = client.Notify(ctx, &pb.AddressRequest{Address: key})
-	if err != nil {
-	}
-	return err
-}
-
-func (r *rpcLayer) checkPredecessor(address string) error {
-	client, err := r.getClient(address)
-	if err != nil { return err }
-	
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-
-	_, err = client.CheckPredecessor(ctx, &pb.Empty{})
-	return err
+	return res.HexHashValue, nil
 }

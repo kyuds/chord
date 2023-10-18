@@ -7,14 +7,14 @@ import (
 )
 
 type fingerEntry struct {
-	id *big.Int
+	id     *big.Int
 	iphash string
 	ipaddr string
-	valid bool
+	valid  bool
 }
 
 type fingerTable struct {
-	tb []*fingerEntry
+	tb   []*fingerEntry
 	lock sync.RWMutex
 }
 
@@ -22,15 +22,14 @@ type fingerTable struct {
 func initFingerTable(h string, address string, size int) fingerTable {
 	tb := make([]*fingerEntry, size)
 	for i := 0; i < size; i++ {
-		tb[i] = &fingerEntry {
-			id: computeFingerId(h, i, size),
+		tb[i] = &fingerEntry{
+			id:     computeFingerId(h, i, size),
 			iphash: h,
 			ipaddr: address,
-			valid: false,
+			valid:  false,
 		}
 	}
-	tb[0].valid = true
-	return fingerTable { tb: tb }
+	return fingerTable{tb: tb}
 }
 
 // from Chord paper: (hash + 2^i) mod 2^m
