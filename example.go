@@ -74,6 +74,8 @@ func main() {
 			}
 		case "quit":
 			break loop
+		// case "stat":
+		// 	c.Stat()
 		}
 	}
 	c.Exit()

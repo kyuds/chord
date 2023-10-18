@@ -2,7 +2,6 @@ package chord
 
 import (
 	"crypto/sha1"
-	"fmt"
 	"hash"
 	"time"
 	"google.golang.org/grpc"
@@ -95,11 +94,11 @@ func (c *chordcli) Lookup(key string) (string, error) {
 	return ip, nil
 }
 
-func (c *chordcli) Stat() {
-	fmt.Println("Stats:")
-	fmt.Println(c.chrd.predecessor)
-	c.chrd.ft.printself()
-}
+// func (c *chordcli) Stat() {
+// 	fmt.Println("Stats:")
+// 	fmt.Println(c.chrd.predecessor)
+// 	c.chrd.ft.printself()
+// }
 
 // Performs a planned exit of the node. 
 func (c *chordcli) Exit() error {

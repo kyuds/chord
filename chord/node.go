@@ -69,12 +69,12 @@ func newNode(conf *Config) (*node, error) {
 	}()
 	
 	go func() {
-		//next := 0
-		ticker := time.NewTicker(1 * time.Second)
+		next := 0
+		ticker := time.NewTicker(200 * time.Millisecond)
 		for {
 			select {
 			case <-ticker.C:
-				//next = n.fixFinger(next)
+				next = n.fixFinger(next)
 			/*
 			case <-node.shutdownCh:
 				ticker.Stop()
@@ -175,7 +175,12 @@ func (n *node) stabilize() {
 			fmt.Println(err)
 		}
 	}
-	if pred != "" && bigBetween(bigify(getHash(n.hf, n.ip)), bigify(getHash(n.hf, succ)), bigify(getHash(n.hf, pred))) {
+
+	t1 := bigify(getHash(n.hf, n.ip))
+	t2 := bigify(getHash(n.hf, succ))
+	t3 := bigify(getHash(n.hf, pred))
+
+	if pred != "" && bigBetween(t1, t2, t3) {
 		succ = pred
 		n.ft.lock.Lock()
 		defer n.ft.lock.Unlock()
@@ -188,23 +193,21 @@ func (n *node) stabilize() {
 	}
 }
 
-// not being called yet.
-// taking the O(n) approach to find queries at the moment. 
 func (n *node) fixFinger(i int) int{
-	find := n.ft.get(i).id
-	// TODO: need to fix this part!!
-	succ, err := n.findSuccessor(hex.EncodeToString(find.Bytes()))
+	i = i + 1
+	f := n.ft.get(i)
+	succ, err := n.findSuccessor(hex.EncodeToString(f.id.Bytes()))
 	if err != nil {
 		fmt.Println("error in fixing fingertable")
 		return i
 	}
 	n.ft.lock.Lock()
 	defer n.ft.lock.Unlock()
-	n.ft.get(i).ipaddr = succ
-	n.ft.get(i).iphash = getHash(n.hf, succ)
-	n.ft.get(i).valid = true
+	f.ipaddr = succ
+	f.iphash = getHash(n.hf, succ)
+	f.valid = true
 
-	return (i + 1) % n.ftLen
+	return i % (n.ftLen - 1)
 }
 
 // gRPC Server (chord_grpc.pb.go) Implementation
