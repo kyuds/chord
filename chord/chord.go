@@ -67,7 +67,7 @@ func DefaultConfigs(address string) *Config {
 		Timeout:       3 * time.Second,
 		MaxIdle:       5 * time.Second,
 		Stabilization: 2 * time.Second,
-		FingerFix:     5 * time.Second,
+		FingerFix:     400 * time.Millisecond,
 	}
 	c.DialOptions = append(
 		c.DialOptions,
@@ -111,6 +111,7 @@ func (c *chordcli) Stat() {
 	fmt.Println(c.n.succ.data)
 }
 
+// Misc (Unnecessary for usage)
 type chordcli struct {
 	n *node
 }

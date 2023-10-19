@@ -2,6 +2,7 @@ package chord
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"sync"
@@ -84,7 +85,19 @@ func initialize(conf *Config) (*node, error) {
 	}()
 
 	go func() {
-
+		next := 0
+		ticker := time.NewTicker(conf.FingerFix)
+		for {
+			select {
+			case <-ticker.C:
+				next = n.fixFinger(next)
+				/*
+					case <-node.shutdownCh:
+						ticker.Stop()
+						return
+				*/
+			}
+		}
 	}()
 
 	return n, nil
@@ -136,7 +149,6 @@ func (n *node) findPredecessor(hashed string) (string, error) {
 	bigKey := bigify(hashed)
 	var err error
 	for {
-		fmt.Println(curr, succ)
 		if curr == n.ip {
 			succ = n.succ.getSuccessor()
 		} else {
@@ -178,6 +190,22 @@ func (n *node) closestPrecedingFinger(hashed string) string {
 		}
 	}
 	return n.ip
+}
+
+// finger fixing
+func (n *node) fixFinger(i int) int {
+	f := n.ft.get(i)
+	succ, err := n.findSuccessor(hex.EncodeToString(f.id.Bytes()))
+	if err != nil {
+		return i
+	}
+	n.ft.lock.Lock()
+	defer n.ft.lock.Unlock()
+	f.ipaddr = succ
+	f.iphash = getHash(n.hf, succ)
+	f.valid = true
+
+	return (i + 1) % n.ftLen
 }
 
 // stabilize
