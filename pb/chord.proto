@@ -15,31 +15,31 @@ service Chord {
 
     // Chord Protocol RPCs
     rpc GetSuccessor(Empty) returns (AddressResponse);
-    rpc ClosestPrecedingFinger(KeyRequest) returns (AddressResponse);
+    rpc ClosestPrecedingFinger(HashKeyRequest) returns (AddressResponse);
 
     // Node Joining RPCs
-    rpc FindSuccessor(KeyRequest) returns (AddressResponse);
+    rpc FindSuccessor(HashKeyRequest) returns (AddressResponse);
     rpc GetPredecessor(Empty) returns (AddressResponse);
     rpc Notify(AddressRequest) returns (Empty);
 
-    // Node Failure Handling RPCs
-    rpc CheckPredecessor(Empty) returns (Empty);
+    // HeartBeat RPC
+    rpc Ping(Empty) returns (Empty);
 }
 
 message Empty {}
 
 message HashFuncResponse {
-    string HashVal = 1;
+    string HexHashValue = 1;
 }
 
-message KeyRequest {
-    string Key = 1;
-}
-
-message AddressRequest {
-    string Address = 1;
+message HashKeyRequest {
+    string HexHashValue = 1;
 }
 
 message AddressResponse {
     string Address = 1;
+}
+
+message AddressRequest {
+    string Address = 2;
 }

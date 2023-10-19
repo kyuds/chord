@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"hash"
 	"time"
+
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 /*
@@ -15,7 +17,7 @@ All API for this implementation of Chord is present in this file and this file o
 means that to use Chord without understanding the internals, only this file needs to be
 referenced. As noted in the README, this implementation of Chord stays true to the definition
 of the protocol given in the original paper (Stoica, et al). Therefore, the only APIs that
-exist are "Initialize", "Lookup", and "Exit". 
+exist are "Initialize", "Lookup", and "Exit".
 
 Initialization of a Chord node (and subsequently, a ring) takes in a Config struct that can
 be modified based on the requirements of the given project. A DefaultConfig exists so that
@@ -35,34 +37,43 @@ will be returned to the user.
 
 Exit is defined for a "planned" exit, as in the program intended for the specific Chord node
 to terminate. This provides methods for the Chord ring to balance itself and respond to the
-termination more quickly. 
+termination more quickly.
 */
 
 type Config struct {
-	Address string
-	Hash func() hash.Hash
-	Joining bool
-	JoinIP string
+	Address       string
+	Hash          func() hash.Hash
+	Joining       bool
+	JoinAddress   string
+	MaxRepli      int
 	ServerOptions []grpc.ServerOption
-	DialOptions []grpc.DialOption
-	Timeout time.Duration
-	MaxIdle time.Duration
+	DialOptions   []grpc.DialOption
+	Timeout       time.Duration
+	MaxIdle       time.Duration
+	Stabilization time.Duration
+	FingerFix     time.Duration
 }
 
-// Default configurations for Chord users. 
+// Default configurations for Chord users.
 func DefaultConfigs(address string) *Config {
-	c := &Config {
-		Address: address,
-		Hash: sha1.New,
-		Joining: false,
-		JoinIP: "",
-		// TODO: figure out how to deal with these later. 
+	c := &Config{
+		Address:       address,
+		Hash:          sha1.New,
+		Joining:       false,
+		JoinAddress:   "",
+		MaxRepli:      5,
 		ServerOptions: nil,
-		DialOptions: make([]grpc.DialOption, 0, 2),
-		Timeout: 10 * time.Millisecond,
-		MaxIdle: 1000 * time.Millisecond,
+		DialOptions:   make([]grpc.DialOption, 0, 2),
+		Timeout:       3 * time.Second,
+		MaxIdle:       5 * time.Second,
+		Stabilization: 2 * time.Second,
+		FingerFix:     400 * time.Millisecond,
 	}
-	c.DialOptions = append(c.DialOptions, grpc.WithInsecure(), grpc.WithBlock())
+	c.DialOptions = append(
+		c.DialOptions,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	return c
 }
 
@@ -71,36 +82,41 @@ func DefaultConfigs(address string) *Config {
 // address is located
 func (c *Config) SetJoinNode(address string) {
 	c.Joining = true
-	c.JoinIP = address
+	c.JoinAddress = address
 }
 
 // Initializes the chord client for the user.
 func Initialize(conf *Config) *chordcli {
-	e := conf.validate()
-	if e != nil { panic(e) }
-
-	n, err := newNode(conf)
-	if err != nil { panic(err) }
-
-	c := &chordcli{chrd: n}
+	err := conf.validate()
+	if err != nil {
+		panic(err)
+	}
+	nd, err := initialize(conf)
+	if err != nil {
+		panic(err)
+	}
+	c := &chordcli{n: nd}
 	return c
 }
 
 // Looks up the given key and returns the
-// node's address responsible for the key. 
+// node's address responsible for the key.
 func (c *chordcli) Lookup(key string) (string, error) {
-	k := getHash(c.chrd.hf, key)
-	ip, err := c.chrd.findSuccessor(k)
-	if err != nil { return "", err }
-	return ip, nil
+	return c.n.findSuccessor(getHash(c.n.hf, key))
 }
 
 func (c *chordcli) Stat() {
 	fmt.Println("Stats:")
-	fmt.Println(c.chrd.predecessor)
-	c.chrd.ft.printself()
+	fmt.Println(c.n.pred)
+	fmt.Println(c.n.succ.data)
 }
 
+// Misc (Unnecessary for usage)
 type chordcli struct {
-	chrd *node
+	n *node
+}
+
+// TODO: validate IP address
+func (c *Config) validate() error {
+	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
 	"github.com/kyuds/go-chord/chord"
 )
 
@@ -17,7 +18,7 @@ func main() {
 	ct := flag.NewFlagSet("create", flag.ExitOnError)
 	ctAddr := ct.String("address", "", "IP address for Chord node start on.")
 
-	if (len(os.Args) < 2) {
+	if len(os.Args) < 2 {
 		fmt.Println("Expected more arguments.")
 	}
 
@@ -39,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if (node_ip == "" || join_ip == "") {
+	if node_ip == "" || join_ip == "" {
 		fmt.Println("Please enter all arguments!")
 		os.Exit(1)
 	}
@@ -55,20 +56,22 @@ func main() {
 	c := chord.Initialize(conf)
 
 	cli := bufio.NewReader(os.Stdin)
-	loop: for {
+
+loop:
+	for {
 		fmt.Print("CHORD: ")
 		cmd, _ := cli.ReadString('\n')
 		cmd = strings.Trim(cmd, " \n")
 		args := strings.Split(cmd, " ")
-		
-		if (len(args) == 0) {
+
+		if len(args) == 0 {
 			fmt.Println("no args!")
 			continue
 		}
 
 		switch args[0] {
 		case "lookup":
-			if (len(args) == 2) {
+			if len(args) == 2 {
 				ret, _ := c.Lookup(args[1])
 				fmt.Println(ret)
 			}

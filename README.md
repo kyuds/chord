@@ -23,7 +23,10 @@ Joining a Chord Ring:
 ./go-chord join --address="localhost:8001" --join="localhost:8000"
 ```
 
-### TODO:
-- [X] Deal with concurrent joins
-- [ ] How to deal with failed nodes
-- [ ] Rewrite codebase based on lessons learned
+git push origin v2-scratch-build
+
+### Development Plan
+- Create a successor queue implemented Chord without finger table
+- Check and implement fault tolerance
+- Implement finger table
+- Implement more advanced versions of find predecessor and closestFinger
