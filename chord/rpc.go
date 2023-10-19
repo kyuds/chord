@@ -30,7 +30,7 @@ type rpc interface {
 	notify(string, string) error
 
 	// failure
-	checkPredecessor(string) error
+	ping(string) error
 }
 
 type rpcLayer struct {
@@ -240,7 +240,7 @@ func (r *rpcLayer) notify(address, key string) error {
 	return err
 }
 
-func (r *rpcLayer) checkPredecessor(address string) error {
+func (r *rpcLayer) ping(address string) error {
 	client, err := r.getClient(address)
 	if err != nil {
 		return err
@@ -249,6 +249,6 @@ func (r *rpcLayer) checkPredecessor(address string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
 
-	_, err = client.CheckPredecessor(ctx, &pb.Empty{})
+	_, err = client.Ping(ctx, &pb.Empty{})
 	return err
 }

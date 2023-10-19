@@ -32,7 +32,7 @@ type ChordClient interface {
 	GetPredecessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*AddressResponse, error)
 	Notify(ctx context.Context, in *AddressRequest, opts ...grpc.CallOption) (*Empty, error)
 	// Node Failure Handling RPCs
-	CheckPredecessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+	Ping(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type chordClient struct {
@@ -97,9 +97,9 @@ func (c *chordClient) Notify(ctx context.Context, in *AddressRequest, opts ...gr
 	return out, nil
 }
 
-func (c *chordClient) CheckPredecessor(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+func (c *chordClient) Ping(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/pb.Chord/CheckPredecessor", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Chord/Ping", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ type ChordServer interface {
 	GetPredecessor(context.Context, *Empty) (*AddressResponse, error)
 	Notify(context.Context, *AddressRequest) (*Empty, error)
 	// Node Failure Handling RPCs
-	CheckPredecessor(context.Context, *Empty) (*Empty, error)
+	Ping(context.Context, *Empty) (*Empty, error)
 	mustEmbedUnimplementedChordServer()
 }
 
@@ -146,8 +146,8 @@ func (UnimplementedChordServer) GetPredecessor(context.Context, *Empty) (*Addres
 func (UnimplementedChordServer) Notify(context.Context, *AddressRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Notify not implemented")
 }
-func (UnimplementedChordServer) CheckPredecessor(context.Context, *Empty) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CheckPredecessor not implemented")
+func (UnimplementedChordServer) Ping(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 func (UnimplementedChordServer) mustEmbedUnimplementedChordServer() {}
 
@@ -270,20 +270,20 @@ func _Chord_Notify_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Chord_CheckPredecessor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Chord_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ChordServer).CheckPredecessor(ctx, in)
+		return srv.(ChordServer).Ping(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/pb.Chord/CheckPredecessor",
+		FullMethod: "/pb.Chord/Ping",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChordServer).CheckPredecessor(ctx, req.(*Empty))
+		return srv.(ChordServer).Ping(ctx, req.(*Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -320,8 +320,8 @@ var Chord_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Chord_Notify_Handler,
 		},
 		{
-			MethodName: "CheckPredecessor",
-			Handler:    _Chord_CheckPredecessor_Handler,
+			MethodName: "Ping",
+			Handler:    _Chord_Ping_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

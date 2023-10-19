@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash"
 	"sync"
+	"time"
 
 	"github.com/kyuds/go-chord/pb"
 )
@@ -17,8 +18,7 @@ type node struct {
 
 	// successors predecessors
 	repli    int
-	succ     *successors
-	succLock sync.RWMutex
+	succ     *successors // basically a queue.
 	pred     string
 	predLock sync.RWMutex
 	ft       fingerTable
@@ -60,16 +60,29 @@ func initialize(conf *Config) (*node, error) {
 	}
 
 	// background processes
-	// stabilize
 	go func() {
 		// check predecessor existence --> clear predecessor if so
 		// clear out all ft table whenever node is determined to be not active
 		// normal stabilization process.
 		// update successors accordingly --> always maintain correct queue.
+		predchecker := time.NewTicker(4 * conf.Stabilization)
+		stabilizer := time.NewTicker(1 * conf.Stabilization)
+		for {
+			select {
+			case <-predchecker.C:
+				n.checkPredecessor()
+			case <-stabilizer.C:
+				n.stabilize()
+				/*
+					case <-n.shutdownCh:
+						ticker.Stop()
+						return
+				*/
+			}
+		}
 
 	}()
 
-	// fix fingers
 	go func() {
 
 	}()
@@ -89,6 +102,12 @@ func (n *node) joinNode(address string) error {
 		return fmt.Errorf("using different hash function from Chord ring.")
 	}
 
+	succ, err := n.rpc.findSuccessor(address, getHash(n.hf, n.ip))
+	if err != nil {
+		return err
+	}
+	n.succ.push(succ)
+
 	return nil
 }
 
@@ -102,30 +121,30 @@ func (n *node) findSuccessor(hashedKey string) (string, error) {
 		return n.succ.getSuccessor(), nil
 	}
 
-	// succ, err := n.rpc.getSuccessor(pred)
-	// if err != nil {
-	// 	n.ft.invalidateAddress(pred)
-	// 	return "", err
-	// }
-	//return succ, nil
-	return "", nil
+	succ, err := n.rpc.getSuccessor(pred)
+	if err != nil {
+		// n.ft.invalidateAddress(pred)
+		return "", err
+	}
+	return succ, nil
+	// return "", nil
 }
 
 func (n *node) findPredecessor(hashed string) (string, error) {
 	curr := n.ip
 	succ := n.succ.getSuccessor()
 	bigKey := bigify(hashed)
-	//var err error
-
+	var err error
 	for {
+		fmt.Println(curr, succ)
 		if curr == n.ip {
 			succ = n.succ.getSuccessor()
 		} else {
-			// succ, err = n.rpc.getSuccessor(curr)
-			// if err != nil {
-			// 	n.ft.invalidateAddress(curr)
-			// 	return "", err
-			// }
+			succ, err = n.rpc.getSuccessor(curr)
+			if err != nil {
+				// n.ft.invalidateAddress(curr)
+				return "", err
+			}
 		}
 		if bigBetweenRightInclude(bigify(getHash(n.hf, curr)), bigify(getHash(n.hf, succ)), bigKey) {
 			break
@@ -133,11 +152,11 @@ func (n *node) findPredecessor(hashed string) (string, error) {
 		if curr == n.ip {
 			curr = n.closestPrecedingFinger(hashed)
 		} else {
-			// curr, err = n.rpc.closestPrecedingFinger(curr, hashed)
-			// if err != nil {
-			// 	n.ft.invalidateAddress(curr)
-			// 	return "", err
-			// }
+			curr, err = n.rpc.closestPrecedingFinger(curr, hashed)
+			if err != nil {
+				// n.ft.invalidateAddress(curr)
+				return "", err
+			}
 		}
 	}
 	return curr, nil
@@ -148,14 +167,74 @@ func (n *node) closestPrecedingFinger(hashed string) string {
 	c2 := bigify(hashed)
 	for i := n.ftLen - 1; i >= 0; i-- {
 		f := n.ft.get(i)
-		if !f.valid {
+		if !f.valid && i != 0 {
 			continue
 		}
-		if bigBetween(c1, c2, f.id) {
+		if i == 0 && bigBetween(c1, c2, f.id) {
+			return n.succ.getSuccessor()
+		}
+		if i != 0 && bigBetween(c1, c2, f.id) {
 			return f.ipaddr
 		}
 	}
 	return n.ip
+}
+
+// stabilize
+func (n *node) stabilize() {
+	var succ string
+	var pred string
+	var err error
+
+	for {
+		succ = n.succ.getSuccessor()
+		if succ == n.ip {
+			pred = n.pred
+			break
+		} else {
+			pred, err = n.rpc.getPredecessor(succ)
+			if err != nil {
+				n.succ.pop()
+			} else {
+				break
+			}
+		}
+	}
+
+	t1 := bigify(getHash(n.hf, n.ip))
+	t2 := bigify(getHash(n.hf, succ))
+	t3 := bigify(getHash(n.hf, pred))
+
+	if pred != "" && bigBetween(t1, t2, t3) {
+		succ = pred
+	}
+	n.succ.clear()
+	if succ != n.ip {
+		n.succ.push(succ)
+		_ = n.rpc.notify(succ, n.ip)
+		curr := succ
+		for {
+			if n.succ.length() >= n.repli {
+				break
+			}
+			curr, err = n.rpc.getSuccessor(curr)
+			if err != nil || curr == n.ip {
+				break
+			}
+			n.succ.push(curr)
+		}
+	}
+}
+
+// check predecessor
+func (n *node) checkPredecessor() {
+	err := n.rpc.ping(n.pred)
+	if err != nil {
+		//n.ft.invalidateAddress(n.pred)
+		n.predLock.Lock()
+		n.pred = ""
+		n.predLock.Unlock()
+	}
 }
 
 // gRPC Server (chord_grpc.pb.go) Implementation
@@ -198,6 +277,53 @@ func (n *node) Notify(ctx context.Context, r *pb.AddressRequest) (*pb.Empty, err
 	return &pb.Empty{}, nil
 }
 
-func (n *node) CheckPredecessor(ctx context.Context, r *pb.Empty) (*pb.Empty, error) {
+func (n *node) Ping(ctx context.Context, r *pb.Empty) (*pb.Empty, error) {
 	return &pb.Empty{}, nil
+}
+
+// successors struct
+type successors struct {
+	ip   string
+	data []string
+	lock sync.RWMutex
+}
+
+func createSuccessorQueue(ownIP string) *successors {
+	return &successors{
+		ip:   ownIP,
+		data: make([]string, 0),
+	}
+}
+
+func (q *successors) push(address string) {
+	q.data = append(q.data, address)
+}
+
+func (q *successors) pop() string {
+	d := q.data[0]
+	q.data = q.data[1:]
+	return d
+}
+
+func (q *successors) get(i int) string {
+	return q.data[i]
+}
+
+func (q *successors) length() int {
+	return len(q.data)
+}
+
+func (q *successors) empty() bool {
+	return len(q.data) == 0
+}
+
+func (q *successors) getSuccessor() string {
+	if q.empty() {
+		return q.ip
+	}
+	return q.get(0)
+}
+
+func (q *successors) clear() {
+	q.data = make([]string, 0)
 }

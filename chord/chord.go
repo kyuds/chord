@@ -64,10 +64,10 @@ func DefaultConfigs(address string) *Config {
 		MaxRepli:      5,
 		ServerOptions: nil,
 		DialOptions:   make([]grpc.DialOption, 0, 2),
-		Timeout:       10 * time.Millisecond,
-		MaxIdle:       1000 * time.Millisecond,
-		Stabilization: time.Second,
-		FingerFix:     500 * time.Second,
+		Timeout:       3 * time.Second,
+		MaxIdle:       5 * time.Second,
+		Stabilization: 2 * time.Second,
+		FingerFix:     5 * time.Second,
 	}
 	c.DialOptions = append(
 		c.DialOptions,
@@ -107,6 +107,8 @@ func (c *chordcli) Lookup(key string) (string, error) {
 
 func (c *chordcli) Stat() {
 	fmt.Println("Stats:")
+	fmt.Println(c.n.pred)
+	fmt.Println(c.n.succ.data)
 }
 
 type chordcli struct {
