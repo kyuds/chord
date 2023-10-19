@@ -9,24 +9,32 @@ project deals with the barest usage of Chord: a mapping between keys and nodes.
 
 All of the relevant APIs are in `chord/chord.go` which includes Chord configurations, 
 initialization, lookups, and planned exits. Please try out the `example.go` file to see 
-a live version of a Chord ring in action. 
+a live version of a Chord ring in action. Fault tolerance is implemented and prevents 
+the whole ring from crashing from a node crash. Key locations are also automatically 
+reassigned after a short period of time.
 
-Currently this version of Chord does not support node failures. It does handle concurrent 
-joins though. 
+Configurations:
+```go
+type Config struct {
+	Address       string
+	Hash          func() hash.Hash
+	Joining       bool
+	JoinAddress   string
+	MaxRepli      int
+	ServerOptions []grpc.ServerOption
+	DialOptions   []grpc.DialOption
+	Timeout       time.Duration
+	MaxIdle       time.Duration
+	Stabilization time.Duration
+	FingerFix     time.Duration
+}
+```
 
-Creating a Chord Ring:
+Creating a Chord Ring with Default Settings:
 ```
 ./go-chord create --address="localhost:8000"
 ```
-Joining a Chord Ring:
+Joining a Chord Ring with Default Settings:
 ```
 ./go-chord join --address="localhost:8001" --join="localhost:8000"
 ```
-
-git push origin v2-scratch-build
-
-### Development Plan
-- Create a successor queue implemented Chord without finger table
-- Check and implement fault tolerance
-- Implement finger table
-- Implement more advanced versions of find predecessor and closestFinger
