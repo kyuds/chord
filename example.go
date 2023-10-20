@@ -76,9 +76,12 @@ loop:
 				fmt.Println(ret)
 			}
 		case "quit":
+			c.Exit()
 			break loop
-		case "stat":
-			c.Stat()
 		}
+	}
+
+	for {
+
 	}
 }

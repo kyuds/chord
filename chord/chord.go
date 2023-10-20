@@ -2,7 +2,6 @@ package chord
 
 import (
 	"crypto/sha1"
-	"fmt"
 	"hash"
 	"time"
 
@@ -105,10 +104,8 @@ func (c *chordcli) Lookup(key string) (string, error) {
 	return c.n.findSuccessor(getHash(c.n.hf, key))
 }
 
-func (c *chordcli) Stat() {
-	fmt.Println("Stats:")
-	fmt.Println(c.n.pred)
-	fmt.Println(c.n.succ.data)
+func (c *chordcli) Exit() {
+	c.n.exit()
 }
 
 // Misc (Unnecessary for usage)

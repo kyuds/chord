@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kyuds/go-chord/pb"
@@ -13,9 +14,10 @@ import (
 
 type node struct {
 	// chord node settings
-	id string
-	ip string
-	hf func() hash.Hash
+	id       string
+	ip       string
+	hf       func() hash.Hash
+	shutdown int32
 
 	// successors predecessors
 	repli    int
@@ -69,16 +71,14 @@ func initialize(conf *Config) (*node, error) {
 		predchecker := time.NewTicker(4 * conf.Stabilization)
 		stabilizer := time.NewTicker(1 * conf.Stabilization)
 		for {
+			if atomic.LoadInt32(&n.shutdown) == 1 {
+				return
+			}
 			select {
 			case <-predchecker.C:
 				n.checkPredecessor()
 			case <-stabilizer.C:
 				n.stabilize()
-				/*
-					case <-n.shutdownCh:
-						ticker.Stop()
-						return
-				*/
 			}
 		}
 
@@ -88,14 +88,12 @@ func initialize(conf *Config) (*node, error) {
 		next := 0
 		ticker := time.NewTicker(conf.FingerFix)
 		for {
+			if atomic.LoadInt32(&n.shutdown) == 1 {
+				return
+			}
 			select {
 			case <-ticker.C:
 				next = n.fixFinger(next)
-				/*
-					case <-node.shutdownCh:
-						ticker.Stop()
-						return
-				*/
 			}
 		}
 	}()
@@ -263,6 +261,12 @@ func (n *node) checkPredecessor() {
 		n.pred = ""
 		n.predLock.Unlock()
 	}
+}
+
+// node exit
+func (n *node) exit() {
+	n.rpc.stop()
+	atomic.StoreInt32(&n.shutdown, 1)
 }
 
 // gRPC Server (chord_grpc.pb.go) Implementation

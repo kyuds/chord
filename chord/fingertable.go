@@ -1,7 +1,6 @@
 package chord
 
 import (
-	"fmt"
 	"math/big"
 	"sync"
 )
@@ -41,16 +40,6 @@ func computeFingerId(hashed string, i int, size int) *big.Int {
 
 func (f *fingerTable) get(i int) *fingerEntry {
 	return f.tb[i]
-}
-
-func (f *fingerTable) printself() {
-	for _, i := range f.tb {
-		fmt.Print(i.id)
-		fmt.Print(" ")
-		fmt.Print(i.ipaddr)
-		fmt.Print(" ")
-		fmt.Println(i.valid)
-	}
 }
 
 func (f *fingerTable) invalidateAddress(address string) {
