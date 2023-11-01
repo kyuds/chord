@@ -1,4 +1,7 @@
 # go-chord
+
+** V2 version: implementation of Chord WITH failure or exit support. O(log n) lookup time.
+
 Implementation of [Chord](https://pdos.csail.mit.edu/papers/chord:sigcomm01/chord_sigcomm.pdf) in Go.
 
 This implementation stays true to the designs of the original paper, and 
