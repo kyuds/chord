@@ -38,3 +38,8 @@ Joining a Chord Ring with Default Settings:
 ```
 ./go-chord join --address="localhost:8001" --join="localhost:8000"
 ```
+
+### Version History
+- [ ] V3: Multiplexing for gRPC servers (WIP)
+- [X] V2: Fault tolerance and exit support
+- [X] V1: Basic Chord joining
