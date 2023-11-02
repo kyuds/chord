@@ -9,7 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kyuds/go-chord/pb"
+	"github.com/kyuds/chord/pb"
+	"google.golang.org/grpc"
 )
 
 type node struct {
@@ -32,7 +33,7 @@ type node struct {
 	rpc rpc
 }
 
-func initialize(conf *Config) (*node, error) {
+func initialize(conf *Config) (*node, *grpc.Server, error) {
 	n := &node{
 		id:    getHash(conf.Hash, conf.Address),
 		ip:    conf.Address,
@@ -48,17 +49,25 @@ func initialize(conf *Config) (*node, error) {
 	// start RPC server: register chord server; start rpc server
 	tmpRPC, err := newRPC(conf)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	n.rpc = tmpRPC
 	pb.RegisterChordServer(tmpRPC.server, n)
-	n.rpc.start()
+	return n, tmpRPC.server, nil
+}
+
+func (n *node) startChord(conf *Config) error {
+	err := n.rpc.start()
+
+	if err != nil {
+		return err
+	}
 
 	if conf.Joining {
-		err = n.joinNode(conf.JoinAddress)
+		err := n.joinNode(conf.JoinAddress)
 		if err != nil {
 			n.rpc.stop()
-			return nil, err
+			return err
 		}
 	}
 
@@ -98,7 +107,7 @@ func initialize(conf *Config) (*node, error) {
 		}
 	}()
 
-	return n, nil
+	return nil
 }
 
 func (n *node) joinNode(address string) error {

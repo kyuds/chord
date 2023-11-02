@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kyuds/go-chord/pb"
+	"github.com/kyuds/chord/pb"
 	"google.golang.org/grpc"
 )
 
