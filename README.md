@@ -1,6 +1,4 @@
-# go-chord
-
-** [WIP] V3 version: support multiplexing for gRPC servers
+# chord
 
 Implementation of [Chord](https://pdos.csail.mit.edu/papers/chord:sigcomm01/chord_sigcomm.pdf) in Go.
 
@@ -43,6 +41,6 @@ Joining a Chord Ring with Default Settings:
 ```
 
 ### Version History
-- [ ] V3: Multiplexing for gRPC servers (WIP)
+- [X] V3: Multiplexing for gRPC servers
 - [X] V2: Fault tolerance and exit support
 - [X] V1: Basic Chord joining
