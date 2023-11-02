@@ -1,4 +1,4 @@
-module github.com/kyuds/go-chord
+module github.com/kyuds/chord
 
 go 1.21.3
 

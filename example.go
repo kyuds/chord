@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/kyuds/go-chord/chord"
+	"github.com/kyuds/chord/chord"
 )
 
 func main() {
@@ -53,7 +53,8 @@ func main() {
 	if joining {
 		conf.SetJoinNode(join_ip)
 	}
-	c := chord.Initialize(conf)
+	c, _ := chord.Initialize(conf)
+	_ = c.StartChord()
 
 	cli := bufio.NewReader(os.Stdin)
 

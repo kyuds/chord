@@ -1,4 +1,4 @@
-# go-chord
+# chord
 Implementation of [Chord](https://pdos.csail.mit.edu/papers/chord:sigcomm01/chord_sigcomm.pdf) in Go.
 
 This implementation stays true to the designs of the original paper, and 

@@ -85,17 +85,21 @@ func (c *Config) SetJoinNode(address string) {
 }
 
 // Initializes the chord client for the user.
-func Initialize(conf *Config) *chordcli {
+func Initialize(conf *Config) (*chordcli, *grpc.Server) {
 	err := conf.validate()
 	if err != nil {
 		panic(err)
 	}
-	nd, err := initialize(conf)
+	nd, server, err := initialize(conf)
 	if err != nil {
 		panic(err)
 	}
-	c := &chordcli{n: nd}
-	return c
+	c := &chordcli{n: nd, c: conf}
+	return c, server
+}
+
+func (c *chordcli) StartChord() error {
+	return c.n.startChord(c.c)
 }
 
 // Looks up the given key and returns the
@@ -111,6 +115,7 @@ func (c *chordcli) Exit() {
 // Misc (Unnecessary for usage)
 type chordcli struct {
 	n *node
+	c *Config
 }
 
 // TODO: validate IP address
