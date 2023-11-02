@@ -1,4 +1,7 @@
-# chord
+# go-chord
+
+** [WIP] V3 version: support multiplexing for gRPC servers
+
 Implementation of [Chord](https://pdos.csail.mit.edu/papers/chord:sigcomm01/chord_sigcomm.pdf) in Go.
 
 This implementation stays true to the designs of the original paper, and 
