@@ -3,12 +3,6 @@ syntax = "proto3";
 option go_package = "github.com/kyuds/chord/pb";
 package pb;
 
-/*
-protoc --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    pb/chord.proto
-*/
-
 service Chord {
     // Chord Integrity RPCs
     rpc GetHashFuncName(Empty) returns (HashFuncResponse);
@@ -33,7 +27,7 @@ message HashFuncResponse {
 }
 
 message HashKeyRequest {
-    string HexHashValue = 1;
+    string HashValue = 1;
 }
 
 message AddressResponse {

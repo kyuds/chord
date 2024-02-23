@@ -14,12 +14,30 @@ func getHash(h func() hash.Hash, key string) *big.Int {
 }
 
 // converter from big.Int to hex string (for rpc)
-func bigToHex(b *big.Int) string {
+func bigToString(b *big.Int) string {
 	return hex.EncodeToString(b.Bytes())
 }
 
 // converter hex from string to big.Int (for rpc)
-func hexToBig(h string) *big.Int {
+func stringToBig(h string) *big.Int {
 	b, _ := hex.DecodeString(h)
 	return new(big.Int).SetBytes(b)
+}
+
+// b1 < key < b2
+func bigInRange(b1, b2, key *big.Int) bool {
+	switch b1.Cmp(b2) {
+	case -1:
+		return b1.Cmp(key) == -1 && b2.Cmp(key) == 1
+	case 0:
+		return b1.Cmp(key) != 0
+	case 1:
+		return b1.Cmp(key) == -1 || b2.Cmp(key) == 1
+	}
+	return true
+}
+
+// b1 < key <= b2
+func bigInRangeRightInclude(b1, b2, key *big.Int) bool {
+	return bigInRange(b1, b2, key) || b2.Cmp(key) == 0
 }

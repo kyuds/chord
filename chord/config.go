@@ -13,7 +13,7 @@ import (
 )
 
 /*
-Explanations on Chord Configurations:
+Chord Configuration Details:
 - NodeID: the identifier of the node. This is mostly used
   for the client, and is not used in the protocol.
 - Address: IP address and port (as a single string) to denote
@@ -31,7 +31,8 @@ Explanations on Chord Configurations:
   a need to multiplex the gRPC server on multiple services.
 - Timeout: Timeouts for gRPC client responses.
 - ServerOptions: gRPC server options.
-- DialOptions: gRPC dial options (for client).
+- DialOptions: gRPC dial options (for client). We discourage using
+  the WithBlock DialOption.
 */
 
 // Configuration for Chord node. The hash function
@@ -47,10 +48,12 @@ type Config struct {
 	JoinAddr     string
 	NumSuccessor int
 	// Chord Background Process
-	MaxIdle       time.Duration
-	Stabilization time.Duration
-	FingerFix     time.Duration
+	Stabilization   time.Duration
+	FingerFix       time.Duration
+	CheckAlive      time.Duration
+	CleanConnection time.Duration
 	// Chord gRPC Settings
+	MaxIdle       time.Duration
 	Server        *grpc.Server
 	Timeout       time.Duration
 	ServerOptions []grpc.ServerOption
@@ -72,8 +75,8 @@ func DefaultConfig(address string, joinaddr string, server *grpc.Server) *Config
 		Timeout:       3 * time.Second,
 		ServerOptions: nil,
 		DialOptions: []grpc.DialOption{
+			// For running locally on different ports.
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		},
 	}
 }
@@ -85,6 +88,11 @@ func DefaultConfig(address string, joinaddr string, server *grpc.Server) *Config
 func (c *Config) HashName() string {
 	// for instance, for outputs string "crypto/sha1.New"
 	return runtime.FuncForPC(reflect.ValueOf(c.Hash).Pointer()).Name()
+}
+
+// Easy API to switch IP address of server to join.
+func (c *Config) SetJoin(address string) {
+	c.JoinAddr = address
 }
 
 // Validate Configurations.
