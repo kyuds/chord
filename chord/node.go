@@ -4,6 +4,7 @@ import (
 	"chord/pb"
 	"fmt"
 	"math/big"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -15,15 +16,17 @@ import (
 // The successor list is integrated into the
 // finger table.
 type ChordNode struct {
-	// // chord node settings
+	// chord node settings
 	conf      *Config
 	ipHash    *big.Int
 	terminate atomic.Bool
 
-	// // successor, predecessor
+	// chord variable state
+	stateLock sync.RWMutex
 	// predecessor  string
-	// predLock     sync.RWMutex
 	// numSuccessor int
+
+	// chord optimization
 	// ft fingerTable
 
 	// gRPC server & transport layer
@@ -117,7 +120,16 @@ func (c *ChordNode) join() error {
 
 // Helper function for stabilization
 func (c *ChordNode) stabilize() {
+	c.stateLock.Lock()
+	defer c.stateLock.Unlock()
+}
 
+// Helper function for rectifying
+func (c *ChordNode) rectify(candidate string) {
+	// should this be made TryLock?
+	c.stateLock.Lock()
+	defer c.stateLock.Unlock()
+	// follow algorithm on Zave, et al
 }
 
 // Helper function for fixing fingers
@@ -139,6 +151,8 @@ func (c *ChordNode) Stop() {
 // again as the ring gets rebalanced), or there was an issue with the underlying
 // goroutines or gRPC server, which is a fatal error.
 func (c *ChordNode) LookUp(key string) (string, string, error) {
+	c.stateLock.RLock()
+	defer c.stateLock.Unlock()
 	return "", "", nil
 }
 

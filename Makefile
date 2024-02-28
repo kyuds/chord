@@ -3,7 +3,7 @@
 
 GO_FILE = $(wildcard chord/*.go) $(wildcard *.go)
 PROTO_FILE = pb/chord.proto
-OUT_FILE = server
+OUT_FILE = example
 
 build: proto $(GO_FILE)
 	go build -o $(OUT_FILE)

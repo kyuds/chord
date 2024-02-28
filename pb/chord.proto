@@ -22,8 +22,12 @@ service Chord {
 
 message Empty {}
 
+// Note all of the response parameters are "optional"
+// because during stabilization, a node will only report
+// back whether its alive or not, but not actually respond
+// to incoming queries. 
 message HashFuncResponse {
-    string HashFuncName = 1;
+    optional string HashFuncName = 1;
 }
 
 message HashKeyRequest {
@@ -31,7 +35,7 @@ message HashKeyRequest {
 }
 
 message AddressResponse {
-    string Address = 1;
+    optional string Address = 1;
 }
 
 message AddressRequest {

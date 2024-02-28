@@ -200,7 +200,7 @@ func (t *transport) getHashFuncName(address string) (string, error) {
 		return "", err
 	}
 	conn.unlockAndTryUpdateTime()
-	return response.HashFuncName, nil
+	return response.GetHashFuncName(), nil
 }
 
 func (t *transport) getSuccessor(address string) (string, error) {
@@ -217,7 +217,7 @@ func (t *transport) getSuccessor(address string) (string, error) {
 		return "", err
 	}
 	conn.unlockAndTryUpdateTime()
-	return response.Address, nil
+	return response.GetAddress(), nil
 }
 
 func (t *transport) closestPrecedingFinger(address string, hash string) (string, error) {
@@ -234,7 +234,7 @@ func (t *transport) closestPrecedingFinger(address string, hash string) (string,
 		return "", err
 	}
 	conn.unlockAndTryUpdateTime()
-	return response.Address, nil
+	return response.GetAddress(), nil
 }
 
 func (t *transport) findSuccessor(address string, hash string) (string, error) {
@@ -251,7 +251,7 @@ func (t *transport) findSuccessor(address string, hash string) (string, error) {
 		return "", err
 	}
 	conn.unlockAndTryUpdateTime()
-	return response.Address, nil
+	return response.GetAddress(), nil
 }
 
 func (t *transport) getPredecessor(address string) (string, error) {
@@ -268,7 +268,7 @@ func (t *transport) getPredecessor(address string) (string, error) {
 		return "", err
 	}
 	conn.unlockAndTryUpdateTime()
-	return response.Address, nil
+	return response.GetAddress(), nil
 }
 
 func (t *transport) notify(address string, key string) error {
