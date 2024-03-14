@@ -1,11 +1,9 @@
 package main
 
-import (
-	"chord/chord"
-	"fmt"
-)
+import "chord/cli"
+
+// ./example localhost:8000 localhost:8001
 
 func main() {
-	c := chord.DefaultConfig("localhost:8000", "", nil)
-	fmt.Println(c.HashName())
+	cli.MockCli()
 }

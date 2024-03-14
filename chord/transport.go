@@ -19,6 +19,13 @@ import (
 // one connection per ip address and allows for multiple uses of
 // such connections.
 
+// API (all other functions are intended to be private):
+// - NewTransport:		Constructor for transport
+// - StartServer:		Start gRPC server
+// - StopServer:		Stop gRPC server
+// - CheckServerDead:	Check if gRPC server errored out
+// - gRPCs:				gRPC invocations
+
 // TODO: need to verify if using the connection pool will screw up any other client connection
 // 		 in case the gRPC server is multiplexed.
 // TODO: verify if gRPC multiplexing actually does work ok. When it does work, we can make
@@ -32,7 +39,7 @@ type transport struct {
 	conf     *Config
 	listener *net.TCPListener
 	server   *grpc.Server
-	alive    atomic.Bool
+	dead     atomic.Bool
 	pool     map[string]*connection
 	poolLock sync.RWMutex
 }
@@ -62,7 +69,7 @@ func newTransport(conf *Config) (*transport, error) {
 		server:   nil,
 		pool:     make(map[string]*connection),
 	}
-	t.alive.Store(false)
+	t.dead.Store(false)
 	if conf.Server == nil {
 		t.server = grpc.NewServer(conf.ServerOptions...)
 	} else {
@@ -77,11 +84,11 @@ func newTransport(conf *Config) (*transport, error) {
 // Start gRPC server. We use an atomic boolean and not a channel
 // to check liveliness since liveliness may be checked more than once.
 func (t *transport) startServer() {
-	// TODO: channel to send error returned from grpc server.Serve()?
 	go func() {
-		t.alive.Store(true)
+		t.dead.Store(true)
 		t.server.Serve(t.listener)
-		t.alive.Store(false)
+		t.dead.Store(false)
+		// TODO: channel to send error returned from grpc server.Serve()?
 	}()
 }
 
@@ -95,7 +102,7 @@ func (t *transport) stopServer() {
 // go routine to ensure liveliness of the system. Isn't too taxing on performance
 // as atomic Load operations are relatively inexpensive.
 func (t *transport) checkServerDead() bool {
-	return !t.alive.Load()
+	return t.dead.Load()
 }
 
 // Function to be used to garbage collect unused gRPC connections. This will be
@@ -126,16 +133,19 @@ func (t *transport) cleanIdleConnections() {
 // the WithBlock dial option.
 func (t *transport) getConnection(address string) (*connection, error) {
 	// Phase 1: Check if client already exists.
+	fmt.Println("GETTING CONNECTION")
 	t.poolLock.RLock()
 	conn, ok := t.pool[address]
 	if ok {
 		conn.lock.RLock()
-		t.poolLock.Unlock()
+		t.poolLock.RUnlock()
 		return conn, nil
 	}
-	t.poolLock.Unlock()
+	t.poolLock.RUnlock()
 
 	// Phase 2: Create a new connection and store it to the pool.
+	fmt.Println("MAKING CONNECTION")
+
 	t.poolLock.Lock()
 	defer t.poolLock.Unlock()
 
@@ -162,6 +172,8 @@ func (t *transport) getConnection(address string) (*connection, error) {
 	t.pool[address] = conn
 	conn.lock.RLock()
 
+	fmt.Println("GOT CONNECTION")
+
 	return conn, nil
 }
 
@@ -186,21 +198,21 @@ func (c *connection) unlockAndTryUpdateTime() {
 // returns a connection with a RLock acquired. It is required
 // by the rpc implementation to call unlockAndTryUpdateTime().
 
-func (t *transport) getHashFuncName(address string) (string, error) {
+func (t *transport) getChordConfigs(address string) (string, int, error) {
 	conn, err := t.getConnection(address)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
 	defer cancel()
 
-	response, err := conn.client.GetHashFuncName(ctx, &pb.Empty{})
+	response, err := conn.client.GetChordConfigs(ctx, &pb.Empty{})
 	if err != nil {
 		conn.lock.Unlock()
-		return "", err
+		return "", 0, err
 	}
 	conn.unlockAndTryUpdateTime()
-	return response.GetHashFuncName(), nil
+	return response.HashFuncName, int(response.SuccessorListLength), nil
 }
 
 func (t *transport) getSuccessor(address string) (string, error) {
@@ -208,50 +220,87 @@ func (t *transport) getSuccessor(address string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
-	defer cancel()
 
-	response, err := conn.client.GetSuccessor(ctx, &pb.Empty{})
-	if err != nil {
-		conn.lock.Unlock()
-		return "", err
+	for i := 0; i < t.conf.MaxRetry; i++ {
+		// deferring cancel() is ok because max retries is expected to be small.
+		ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
+		defer cancel()
+
+		// call RPC
+		response, err := conn.client.GetSuccessor(ctx, &pb.Empty{})
+		if err != nil {
+			conn.lock.Unlock()
+			return "", err
+		}
+		if response.Present {
+			conn.unlockAndTryUpdateTime()
+			return response.Address, nil
+		}
+
+		// delaying retries so that other nodes have the opportunity to unlock resources.
+		time.Sleep(10 * time.Millisecond)
 	}
-	conn.unlockAndTryUpdateTime()
-	return response.GetAddress(), nil
+	conn.lock.Unlock()
+	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
-func (t *transport) closestPrecedingFinger(address string, hash string) (string, error) {
+func (t *transport) closestPrecedingFinger(address, key string) (string, error) {
 	conn, err := t.getConnection(address)
 	if err != nil {
 		return "", err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
-	defer cancel()
 
-	response, err := conn.client.ClosestPrecedingFinger(ctx, &pb.HashKeyRequest{HashValue: hash})
-	if err != nil {
-		conn.lock.Unlock()
-		return "", err
+	for i := 0; i < t.conf.MaxRetry; i++ {
+		// deferring cancel() is ok because max retries is expected to be small.
+		ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
+		defer cancel()
+
+		// call RPC
+		response, err := conn.client.ClosestPrecedingFinger(ctx, &pb.HashKeyRequest{HashValue: key})
+		if err != nil {
+			conn.lock.Unlock()
+			return "", err
+		}
+		if response.Present {
+			conn.unlockAndTryUpdateTime()
+			return response.Address, nil
+		}
+
+		// delaying retries so that other nodes have the opportunity to unlock resources.
+		time.Sleep(10 * time.Millisecond)
 	}
-	conn.unlockAndTryUpdateTime()
-	return response.GetAddress(), nil
+	conn.lock.Unlock()
+	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
-func (t *transport) findSuccessor(address string, hash string) (string, error) {
+// for joining ONLY
+func (t *transport) findPredecessor(address, key string) (string, error) {
 	conn, err := t.getConnection(address)
 	if err != nil {
 		return "", err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
-	defer cancel()
 
-	response, err := conn.client.FindSuccessor(ctx, &pb.HashKeyRequest{HashValue: hash})
-	if err != nil {
-		conn.lock.Unlock()
-		return "", err
+	for i := 0; i < t.conf.MaxRetry; i++ {
+		// deferring cancel() is ok because max retries is expected to be small.
+		ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
+		defer cancel()
+
+		// call RPC
+		response, err := conn.client.FindPredecessor(ctx, &pb.HashKeyRequest{HashValue: key})
+		if err != nil {
+			conn.lock.Unlock()
+			return "", err
+		}
+		if response.Present {
+			conn.unlockAndTryUpdateTime()
+			return response.Address, nil
+		}
+
+		// delaying retries so that other nodes have the opportunity to unlock resources.
+		time.Sleep(10 * time.Millisecond)
 	}
-	conn.unlockAndTryUpdateTime()
-	return response.GetAddress(), nil
+	conn.lock.Unlock()
+	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
 func (t *transport) getPredecessor(address string) (string, error) {
@@ -259,22 +308,64 @@ func (t *transport) getPredecessor(address string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
-	defer cancel()
 
-	response, err := conn.client.GetPredecessor(ctx, &pb.Empty{})
-	if err != nil {
-		conn.lock.Unlock()
-		return "", err
+	for i := 0; i < t.conf.MaxRetry; i++ {
+		// deferring cancel() is ok because max retries is expected to be small.
+		ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
+		defer cancel()
+
+		// call RPC
+		response, err := conn.client.GetPredecessor(ctx, &pb.Empty{})
+		if err != nil {
+			conn.lock.Unlock()
+			return "", err
+		}
+		if response.Present {
+			conn.unlockAndTryUpdateTime()
+			return response.Address, nil
+		}
+
+		// delaying retries so that other nodes have the opportunity to unlock resources.
+		time.Sleep(10 * time.Millisecond)
 	}
-	conn.unlockAndTryUpdateTime()
-	return response.GetAddress(), nil
+	conn.lock.Unlock()
+	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
-func (t *transport) notify(address string, key string) error {
+func (t *transport) getSuccessorList(address string) ([]string, error) {
 	conn, err := t.getConnection(address)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	for i := 0; i < t.conf.MaxRetry; i++ {
+		// deferring cancel() is ok because max retries is expected to be small.
+		ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
+		defer cancel()
+
+		// call RPC
+		response, err := conn.client.GetSuccessorList(ctx, &pb.Empty{})
+		if err != nil {
+			conn.lock.Unlock()
+			return nil, err
+		}
+		if response.Present {
+			conn.unlockAndTryUpdateTime()
+			return response.Addresses, nil
+		}
+
+		// delaying retries so that other nodes have the opportunity to unlock resources.
+		time.Sleep(10 * time.Millisecond)
+	}
+	conn.lock.Unlock()
+	return nil, fmt.Errorf("getChordConfig rpc failed after max retries")
+}
+
+// notify doesn't need to do retries or return anything. We assume that node exists.
+func (t *transport) notify(address string, key string) {
+	conn, err := t.getConnection(address)
+	if err != nil {
+		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), t.conf.Timeout)
 	defer cancel()
@@ -282,12 +373,12 @@ func (t *transport) notify(address string, key string) error {
 	_, err = conn.client.Notify(ctx, &pb.AddressRequest{Address: key})
 	if err != nil {
 		conn.lock.Unlock()
-		return err
+		return
 	}
 	conn.unlockAndTryUpdateTime()
-	return nil
 }
 
+// ping doesn't need retries as node will report positive immediately when it is alive.
 func (t *transport) ping(address string) bool {
 	conn, err := t.getConnection(address)
 	if err != nil {

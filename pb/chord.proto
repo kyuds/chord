@@ -5,29 +5,34 @@ package pb;
 
 service Chord {
     // Chord Integrity RPCs
-    rpc GetHashFuncName(Empty) returns (HashFuncResponse);
+    rpc GetChordConfigs(Empty) returns (ConfigResponse);
 
     // Chord Protocol RPCs
     rpc GetSuccessor(Empty) returns (AddressResponse);
     rpc ClosestPrecedingFinger(HashKeyRequest) returns (AddressResponse);
 
-    // Node Joining RPCs
-    rpc FindSuccessor(HashKeyRequest) returns (AddressResponse);
+    // Node Joining RPC
+    rpc FindPredecessor(HashKeyRequest) returns (AddressResponse);
+
+    // Node Stabilization RPC
     rpc GetPredecessor(Empty) returns (AddressResponse);
+    rpc GetSuccessorList(Empty) returns (AddressListResponse);
     rpc Notify(AddressRequest) returns (Empty);
 
     // HeartBeat RPC
     rpc Ping(Empty) returns (Empty);
 }
 
-message Empty {}
-
 // Note all of the response parameters are "optional"
 // because during stabilization, a node will only report
 // back whether its alive or not, but not actually respond
 // to incoming queries. 
-message HashFuncResponse {
-    optional string HashFuncName = 1;
+
+message Empty {}
+
+message ConfigResponse {
+    string HashFuncName = 1;
+    int32 SuccessorListLength = 2;
 }
 
 message HashKeyRequest {
@@ -35,9 +40,16 @@ message HashKeyRequest {
 }
 
 message AddressResponse {
-    optional string Address = 1;
+    bool Present = 1;
+    string Address = 2;
 }
 
 message AddressRequest {
-    string Address = 2;
+    string Address = 1;
+}
+
+message AddressListResponse {
+    bool Present = 1;
+    repeated string Addresses = 2;
+    int32 Length = 3;
 }

@@ -54,6 +54,7 @@ type Config struct {
 	CleanConnection time.Duration
 	// Chord gRPC Settings
 	MaxIdle       time.Duration
+	MaxRetry      int
 	Server        *grpc.Server
 	Timeout       time.Duration
 	ServerOptions []grpc.ServerOption
@@ -63,17 +64,20 @@ type Config struct {
 // Default Configurations. We default the NodeID to the IP address.
 func DefaultConfig(address string, joinaddr string, server *grpc.Server) *Config {
 	return &Config{
-		NodeID:        address,
-		Address:       address,
-		Hash:          sha1.New,
-		JoinAddr:      joinaddr,
-		NumSuccessor:  3,
-		MaxIdle:       8 * time.Second,
-		Stabilization: time.Second,
-		FingerFix:     400 * time.Millisecond,
-		Server:        server,
-		Timeout:       3 * time.Second,
-		ServerOptions: nil,
+		NodeID:          address,
+		Address:         address,
+		Hash:            sha1.New,
+		JoinAddr:        joinaddr,
+		NumSuccessor:    3,
+		MaxIdle:         8 * time.Second,
+		MaxRetry:        3,
+		Stabilization:   time.Second,
+		FingerFix:       400 * time.Millisecond,
+		CheckAlive:      2 * time.Second,
+		CleanConnection: 4 * time.Second,
+		Server:          server,
+		Timeout:         3 * time.Second,
+		ServerOptions:   nil,
 		DialOptions: []grpc.DialOption{
 			// For running locally on different ports.
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -109,6 +113,9 @@ func ValidateConfig(config *Config) error {
 	}
 	if config.Server != nil {
 		return fmt.Errorf("chord grpc multiplexing is not supported yet")
+	}
+	if config.MaxRetry < 1 {
+		return fmt.Errorf("grpc should retry at least once")
 	}
 	return nil
 }
