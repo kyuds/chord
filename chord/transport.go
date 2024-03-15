@@ -133,7 +133,6 @@ func (t *transport) cleanIdleConnections() {
 // the WithBlock dial option.
 func (t *transport) getConnection(address string) (*connection, error) {
 	// Phase 1: Check if client already exists.
-	fmt.Println("GETTING CONNECTION")
 	t.poolLock.RLock()
 	conn, ok := t.pool[address]
 	if ok {
@@ -144,8 +143,6 @@ func (t *transport) getConnection(address string) (*connection, error) {
 	t.poolLock.RUnlock()
 
 	// Phase 2: Create a new connection and store it to the pool.
-	fmt.Println("MAKING CONNECTION")
-
 	t.poolLock.Lock()
 	defer t.poolLock.Unlock()
 
@@ -171,8 +168,6 @@ func (t *transport) getConnection(address string) (*connection, error) {
 	// save to pool and read lock the connection.
 	t.pool[address] = conn
 	conn.lock.RLock()
-
-	fmt.Println("GOT CONNECTION")
 
 	return conn, nil
 }
@@ -238,7 +233,7 @@ func (t *transport) getSuccessor(address string) (string, error) {
 		}
 
 		// delaying retries so that other nodes have the opportunity to unlock resources.
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(t.conf.RetryTime)
 	}
 	conn.lock.RUnlock()
 	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
@@ -267,7 +262,7 @@ func (t *transport) closestPrecedingFinger(address, key string) (string, error) 
 		}
 
 		// delaying retries so that other nodes have the opportunity to unlock resources.
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(t.conf.RetryTime)
 	}
 	conn.lock.RUnlock()
 	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
@@ -297,7 +292,7 @@ func (t *transport) findPredecessor(address, key string) (string, error) {
 		}
 
 		// delaying retries so that other nodes have the opportunity to unlock resources.
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(t.conf.RetryTime)
 	}
 	conn.lock.RUnlock()
 	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
@@ -326,7 +321,7 @@ func (t *transport) getPredecessor(address string) (string, error) {
 		}
 
 		// delaying retries so that other nodes have the opportunity to unlock resources.
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(t.conf.RetryTime)
 	}
 	conn.lock.RUnlock()
 	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
@@ -355,7 +350,7 @@ func (t *transport) getSuccessorList(address string) ([]string, error) {
 		}
 
 		// delaying retries so that other nodes have the opportunity to unlock resources.
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(t.conf.RetryTime)
 	}
 	conn.lock.RUnlock()
 	return nil, fmt.Errorf("getChordConfig rpc failed after max retries")

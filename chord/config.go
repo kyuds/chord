@@ -55,6 +55,7 @@ type Config struct {
 	// Chord gRPC Settings
 	MaxIdle       time.Duration
 	MaxRetry      int
+	RetryTime     time.Duration
 	Server        *grpc.Server
 	Timeout       time.Duration
 	ServerOptions []grpc.ServerOption
@@ -71,6 +72,7 @@ func DefaultConfig(address string, joinaddr string, server *grpc.Server) *Config
 		NumSuccessor:    3,
 		MaxIdle:         8 * time.Second,
 		MaxRetry:        3,
+		RetryTime:       20 * time.Millisecond,
 		Stabilization:   time.Second,
 		FingerFix:       400 * time.Millisecond,
 		CheckAlive:      2 * time.Second,

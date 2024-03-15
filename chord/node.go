@@ -82,7 +82,7 @@ func (c *ChordNode) Start() error {
 			}
 			select {
 			case <-stabilizer.C:
-				// c.stabilize()
+				c.stabilize()
 			case <-fingerfix.C:
 				nextFingerIndex = c.fixFingerTable(nextFingerIndex)
 			case <-liveliness.C:
@@ -131,26 +131,31 @@ func (c *ChordNode) join() error {
 // Helper function for stabilization
 func (c *ChordNode) stabilize() {
 	c.stateLock.Lock()
+	defer c.stateLock.Unlock()
+	c.stabilize_helper()
+}
+
+func (c *ChordNode) stabilize_helper() {
 	succ := c.successorList[0]
 	succList, err1 := c.transport.getSuccessorList(succ)
 	succPred, err2 := c.transport.getPredecessor(succ)
+	fmt.Println(succList)
+	fmt.Println(succPred)
 	if err1 != nil || err2 != nil {
 		if len(c.successorList) == 1 {
 			panic("successorlist ran out")
 		}
 		c.successorList = c.successorList[:len(c.successorList)-1]
-		c.stateLock.Unlock()
-		c.stabilize()
-		return
-	}
-	c.successorList = append(c.successorList[:1], succList[:len(succList)-1]...)
-	if bigInRange(c.ipHash, getHash(c.conf.Hash, c.successorList[0]), getHash(c.conf.Hash, succPred)) {
-		succList2, err := c.transport.getSuccessorList(succPred)
-		if err == nil {
-			c.successorList = append([]string{succPred}, succList2[:len(succList2)-1]...)
+		c.stabilize_helper()
+	} else {
+		c.successorList = append(c.successorList[:1], succList[:len(succList)-1]...)
+		if bigInRange(c.ipHash, getHash(c.conf.Hash, c.successorList[0]), getHash(c.conf.Hash, succPred)) {
+			succList2, err := c.transport.getSuccessorList(succPred)
+			if err == nil {
+				c.successorList = append([]string{succPred}, succList2[:len(succList2)-1]...)
+			}
 		}
 	}
-	c.stateLock.Unlock()
 }
 
 // Helper function for rectifying

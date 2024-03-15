@@ -35,6 +35,8 @@ func MockTransportTestCli() {
 			dn.Switch()
 		case "call":
 			dn.CallRPC(os.Args[2])
+		case "callself":
+			dn.CallRPC(os.Args[1])
 		}
 	}
 }

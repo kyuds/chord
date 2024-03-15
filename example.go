@@ -2,8 +2,15 @@ package main
 
 import "chord/cli"
 
-// ./example localhost:8000 localhost:8001
+/*
+MockCli
+./example localhost:8000 localhost:8001
+
+Cli
+./example create --address=localhost:8000
+*/
 
 func main() {
-	cli.MockTransportTestCli()
+	cli.Cli()
+	// cli.MockTransportTestCli()
 }
