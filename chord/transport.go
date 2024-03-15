@@ -88,7 +88,7 @@ func (t *transport) startServer() {
 		t.dead.Store(true)
 		t.server.Serve(t.listener)
 		t.dead.Store(false)
-		// TODO: channel to send error returned from grpc server.Serve()?
+		// TODO: channel to send error returned from grpc server.Serve()
 	}()
 }
 
@@ -186,7 +186,7 @@ func (t *transport) getConnection(address string) (*connection, error) {
 func (c *connection) unlockAndTryUpdateTime() {
 	// Keep in mind: between Unlock and TryLock, connection may be
 	// deleted from the pool.
-	c.lock.Unlock()
+	c.lock.RUnlock()
 	if c.lock.TryLock() {
 		c.lastActive = time.Now()
 		c.lock.Unlock()
@@ -208,7 +208,7 @@ func (t *transport) getChordConfigs(address string) (string, int, error) {
 
 	response, err := conn.client.GetChordConfigs(ctx, &pb.Empty{})
 	if err != nil {
-		conn.lock.Unlock()
+		conn.lock.RUnlock()
 		return "", 0, err
 	}
 	conn.unlockAndTryUpdateTime()
@@ -229,7 +229,7 @@ func (t *transport) getSuccessor(address string) (string, error) {
 		// call RPC
 		response, err := conn.client.GetSuccessor(ctx, &pb.Empty{})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -240,7 +240,7 @@ func (t *transport) getSuccessor(address string) (string, error) {
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
+	conn.lock.RUnlock()
 	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
@@ -258,7 +258,7 @@ func (t *transport) closestPrecedingFinger(address, key string) (string, error) 
 		// call RPC
 		response, err := conn.client.ClosestPrecedingFinger(ctx, &pb.HashKeyRequest{HashValue: key})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -269,7 +269,7 @@ func (t *transport) closestPrecedingFinger(address, key string) (string, error) 
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
+	conn.lock.RUnlock()
 	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
@@ -288,7 +288,7 @@ func (t *transport) findPredecessor(address, key string) (string, error) {
 		// call RPC
 		response, err := conn.client.FindPredecessor(ctx, &pb.HashKeyRequest{HashValue: key})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -299,7 +299,7 @@ func (t *transport) findPredecessor(address, key string) (string, error) {
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
+	conn.lock.RUnlock()
 	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
@@ -317,7 +317,7 @@ func (t *transport) getPredecessor(address string) (string, error) {
 		// call RPC
 		response, err := conn.client.GetPredecessor(ctx, &pb.Empty{})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -328,7 +328,7 @@ func (t *transport) getPredecessor(address string) (string, error) {
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
+	conn.lock.RUnlock()
 	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
@@ -346,7 +346,7 @@ func (t *transport) getSuccessorList(address string) ([]string, error) {
 		// call RPC
 		response, err := conn.client.GetSuccessorList(ctx, &pb.Empty{})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return nil, err
 		}
 		if response.Present {
@@ -357,7 +357,7 @@ func (t *transport) getSuccessorList(address string) ([]string, error) {
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
+	conn.lock.RUnlock()
 	return nil, fmt.Errorf("getChordConfig rpc failed after max retries")
 }
 
@@ -372,7 +372,7 @@ func (t *transport) notify(address string, key string) {
 
 	_, err = conn.client.Notify(ctx, &pb.AddressRequest{Address: key})
 	if err != nil {
-		conn.lock.Unlock()
+		conn.lock.RUnlock()
 		return
 	}
 	conn.unlockAndTryUpdateTime()
@@ -389,7 +389,7 @@ func (t *transport) ping(address string) bool {
 
 	_, err = conn.client.Ping(ctx, &pb.Empty{})
 	if err != nil {
-		conn.lock.Unlock()
+		conn.lock.RUnlock()
 		return false
 	}
 	conn.unlockAndTryUpdateTime()

@@ -7,7 +7,20 @@ import (
 	"strings"
 )
 
-func MockCli() {
+/*
+Testing code to see if the transport layer is functioning
+correctly.
+Verified:
+- gRPC returns correct results
+- if it reports a not present, retries multiple times
+- retry limited to 3 times
+- caches connections
+- garbage collects connections
+- updates times so that garbage collection only happens
+  for idle connections.
+*/
+
+func MockTransportTestCli() {
 	conf := chord.DefaultConfig(os.Args[1], "", nil)
 	dn := chord.NewDummy(conf)
 	dn.Start()
