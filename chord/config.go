@@ -73,7 +73,7 @@ func DefaultConfig(address string, joinaddr string, server *grpc.Server) *Config
 		MaxIdle:         8 * time.Second,
 		MaxRetry:        3,
 		RetryTime:       20 * time.Millisecond,
-		Stabilization:   time.Second,
+		Stabilization:   2 * time.Second,
 		FingerFix:       400 * time.Millisecond,
 		CheckAlive:      2 * time.Second,
 		CleanConnection: 4 * time.Second,

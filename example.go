@@ -8,6 +8,7 @@ MockCli
 
 Cli
 ./example create --address=localhost:8000
+./example join --address="localhost:8001" --join="localhost:8000"
 */
 
 func main() {

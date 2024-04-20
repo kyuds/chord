@@ -10,6 +10,10 @@ import (
 	"chord/chord"
 )
 
+// ./example create --address="localhost:8000"
+// ./example join --address="localhost:8001" --join="localhost:8000"
+// ./example join --address="localhost:8002" --join="localhost:8000"
+
 func Cli() {
 	jn := flag.NewFlagSet("join", flag.ExitOnError)
 	jnAddr := jn.String("address", "", "IP address for Chord node start on.")

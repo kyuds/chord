@@ -182,7 +182,6 @@ func (c *connection) unlockAndTryUpdateTime() {
 	// Keep in mind: between Unlock and TryLock, connection may be
 	// deleted from the pool.
 	c.lock.RUnlock()
-	c.lock.RUnlock()
 	if c.lock.TryLock() {
 		c.lastActive = time.Now()
 		c.lock.Unlock()
@@ -205,7 +204,6 @@ func (t *transport) getChordConfigs(address string) (string, int, error) {
 	response, err := conn.client.GetChordConfigs(ctx, &pb.Empty{})
 	if err != nil {
 		conn.lock.RUnlock()
-		conn.lock.RUnlock()
 		return "", 0, err
 	}
 	conn.unlockAndTryUpdateTime()
@@ -226,7 +224,6 @@ func (t *transport) getSuccessor(address string) (string, error) {
 		// call RPC
 		response, err := conn.client.GetSuccessor(ctx, &pb.Empty{})
 		if err != nil {
-			conn.lock.RUnlock()
 			conn.lock.RUnlock()
 			return "", err
 		}
@@ -256,7 +253,6 @@ func (t *transport) closestPrecedingFinger(address, key string) (string, error) 
 		// call RPC
 		response, err := conn.client.ClosestPrecedingFinger(ctx, &pb.HashKeyRequest{HashValue: key})
 		if err != nil {
-			conn.lock.RUnlock()
 			conn.lock.RUnlock()
 			return "", err
 		}
@@ -288,7 +284,6 @@ func (t *transport) findPredecessor(address, key string) (string, error) {
 		response, err := conn.client.FindPredecessor(ctx, &pb.HashKeyRequest{HashValue: key})
 		if err != nil {
 			conn.lock.RUnlock()
-			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -317,7 +312,6 @@ func (t *transport) getPredecessor(address string) (string, error) {
 		// call RPC
 		response, err := conn.client.GetPredecessor(ctx, &pb.Empty{})
 		if err != nil {
-			conn.lock.RUnlock()
 			conn.lock.RUnlock()
 			return "", err
 		}
@@ -348,7 +342,6 @@ func (t *transport) getSuccessorList(address string) ([]string, error) {
 		response, err := conn.client.GetSuccessorList(ctx, &pb.Empty{})
 		if err != nil {
 			conn.lock.RUnlock()
-			conn.lock.RUnlock()
 			return nil, err
 		}
 		if response.Present {
@@ -375,7 +368,6 @@ func (t *transport) notify(address string, key string) {
 	_, err = conn.client.Notify(ctx, &pb.AddressRequest{Address: key})
 	if err != nil {
 		conn.lock.RUnlock()
-		conn.lock.RUnlock()
 		return
 	}
 	conn.unlockAndTryUpdateTime()
@@ -392,7 +384,6 @@ func (t *transport) ping(address string) bool {
 
 	_, err = conn.client.Ping(ctx, &pb.Empty{})
 	if err != nil {
-		conn.lock.RUnlock()
 		conn.lock.RUnlock()
 		return false
 	}

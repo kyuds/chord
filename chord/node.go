@@ -142,6 +142,7 @@ func (c *ChordNode) stabilize() {
 
 // actual stabilization routine.
 // separated for more robust synchronization.
+// TODO: padding for shorter succList
 func (c *ChordNode) stabilize_internal() {
 	var succ string
 	var succList []string
@@ -161,7 +162,7 @@ func (c *ChordNode) stabilize_internal() {
 			if len(c.successorList) == 1 {
 				panic("successorlist ran out")
 			}
-			c.successorList = c.successorList[:len(c.successorList)-1]
+			c.successorList = c.successorList[1:len(c.successorList)]
 			c.stabilize_internal()
 			return
 		}
@@ -253,8 +254,10 @@ func (c *ChordNode) findPredecessor(key *big.Int) (string, error) {
 // This is tentative for only immediate successor pointer
 func (c *ChordNode) closestPrecedingFinger(key *big.Int) string {
 	f := big.NewInt(1)
-	f.Add(f, key)
-	f.Mod(f, big.NewInt(2<<c.conf.Hash().Size()))
+	f.Add(f, c.ipHash)
+	tmp := c.conf.Hash().Size() * 8
+	tmp2 := big.NewInt(0).Exp(big.NewInt(int64(2)), big.NewInt(int64(tmp)), big.NewInt(0))
+	f.Mod(f, tmp2)
 	if bigInRange(c.ipHash, key, f) {
 		return c.successorList[0]
 	}
