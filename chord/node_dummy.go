@@ -16,6 +16,7 @@ type DummyNode struct {
 	conf      *Config
 	transport *transport
 	cont      bool
+	skip      int
 	pb.UnimplementedChordServer
 }
 
@@ -23,6 +24,7 @@ func NewDummy(conf *Config) *DummyNode {
 	d := &DummyNode{
 		conf: conf,
 		cont: true,
+		skip: 0,
 	}
 	t, err := newTransport(conf)
 	if err != nil {
@@ -56,7 +58,7 @@ func (d *DummyNode) Switch() {
 func (d *DummyNode) CallRPC(address string) {
 	ret, err := d.transport.getSuccessor(address)
 	if err != nil {
-		fmt.Println(err)
+		// fmt.Println(err)
 	} else {
 		fmt.Println(ret)
 	}
@@ -71,6 +73,13 @@ func (d *DummyNode) GetChordConfigs(ctx context.Context, r *pb.Empty) (*pb.Confi
 }
 
 func (d *DummyNode) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
+	d.skip += 1
+	if d.skip%3 != 0 {
+		return &pb.AddressResponse{
+			Present: false,
+			Address: "",
+		}, nil
+	}
 	return &pb.AddressResponse{
 		Present: d.cont,
 		Address: "GetSuccessor",

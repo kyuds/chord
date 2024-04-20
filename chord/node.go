@@ -83,6 +83,7 @@ func (c *ChordNode) Start() error {
 			select {
 			case <-stabilizer.C:
 				c.stabilize()
+				c.stabilize()
 			case <-fingerfix.C:
 				nextFingerIndex = c.fixFingerTable(nextFingerIndex)
 			case <-liveliness.C:
