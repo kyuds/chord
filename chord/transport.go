@@ -85,9 +85,9 @@ func newTransport(conf *Config) (*transport, error) {
 // to check liveliness since liveliness may be checked more than once.
 func (t *transport) startServer() {
 	go func() {
-		t.dead.Store(true)
-		t.server.Serve(t.listener)
 		t.dead.Store(false)
+		_ = t.server.Serve(t.listener)
+		t.dead.Store(true)
 		// TODO: channel to send error returned from grpc server.Serve()?
 	}()
 }
@@ -133,7 +133,6 @@ func (t *transport) cleanIdleConnections() {
 // the WithBlock dial option.
 func (t *transport) getConnection(address string) (*connection, error) {
 	// Phase 1: Check if client already exists.
-	fmt.Println("GETTING CONNECTION")
 	t.poolLock.RLock()
 	conn, ok := t.pool[address]
 	if ok {
@@ -144,8 +143,6 @@ func (t *transport) getConnection(address string) (*connection, error) {
 	t.poolLock.RUnlock()
 
 	// Phase 2: Create a new connection and store it to the pool.
-	fmt.Println("MAKING CONNECTION")
-
 	t.poolLock.Lock()
 	defer t.poolLock.Unlock()
 
@@ -172,8 +169,6 @@ func (t *transport) getConnection(address string) (*connection, error) {
 	t.pool[address] = conn
 	conn.lock.RLock()
 
-	fmt.Println("GOT CONNECTION")
-
 	return conn, nil
 }
 
@@ -186,7 +181,7 @@ func (t *transport) getConnection(address string) (*connection, error) {
 func (c *connection) unlockAndTryUpdateTime() {
 	// Keep in mind: between Unlock and TryLock, connection may be
 	// deleted from the pool.
-	c.lock.Unlock()
+	c.lock.RUnlock()
 	if c.lock.TryLock() {
 		c.lastActive = time.Now()
 		c.lock.Unlock()
@@ -208,7 +203,7 @@ func (t *transport) getChordConfigs(address string) (string, int, error) {
 
 	response, err := conn.client.GetChordConfigs(ctx, &pb.Empty{})
 	if err != nil {
-		conn.lock.Unlock()
+		conn.lock.RUnlock()
 		return "", 0, err
 	}
 	conn.unlockAndTryUpdateTime()
@@ -229,7 +224,7 @@ func (t *transport) getSuccessor(address string) (string, error) {
 		// call RPC
 		response, err := conn.client.GetSuccessor(ctx, &pb.Empty{})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -240,8 +235,8 @@ func (t *transport) getSuccessor(address string) (string, error) {
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
-	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
+	conn.lock.RUnlock()
+	return "", fmt.Errorf("getSuccessor rpc failed after max retries")
 }
 
 func (t *transport) closestPrecedingFinger(address, key string) (string, error) {
@@ -258,7 +253,7 @@ func (t *transport) closestPrecedingFinger(address, key string) (string, error) 
 		// call RPC
 		response, err := conn.client.ClosestPrecedingFinger(ctx, &pb.HashKeyRequest{HashValue: key})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -269,8 +264,8 @@ func (t *transport) closestPrecedingFinger(address, key string) (string, error) 
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
-	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
+	conn.lock.RUnlock()
+	return "", fmt.Errorf("closestPrecedingFinger rpc failed after max retries")
 }
 
 // for joining ONLY
@@ -288,7 +283,7 @@ func (t *transport) findPredecessor(address, key string) (string, error) {
 		// call RPC
 		response, err := conn.client.FindPredecessor(ctx, &pb.HashKeyRequest{HashValue: key})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -299,8 +294,8 @@ func (t *transport) findPredecessor(address, key string) (string, error) {
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
-	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
+	conn.lock.RUnlock()
+	return "", fmt.Errorf("findPredecessor rpc failed after max retries")
 }
 
 func (t *transport) getPredecessor(address string) (string, error) {
@@ -317,7 +312,7 @@ func (t *transport) getPredecessor(address string) (string, error) {
 		// call RPC
 		response, err := conn.client.GetPredecessor(ctx, &pb.Empty{})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return "", err
 		}
 		if response.Present {
@@ -328,8 +323,8 @@ func (t *transport) getPredecessor(address string) (string, error) {
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
-	return "", fmt.Errorf("getChordConfig rpc failed after max retries")
+	conn.lock.RUnlock()
+	return "", fmt.Errorf("getPredecessor rpc failed after max retries")
 }
 
 func (t *transport) getSuccessorList(address string) ([]string, error) {
@@ -346,7 +341,7 @@ func (t *transport) getSuccessorList(address string) ([]string, error) {
 		// call RPC
 		response, err := conn.client.GetSuccessorList(ctx, &pb.Empty{})
 		if err != nil {
-			conn.lock.Unlock()
+			conn.lock.RUnlock()
 			return nil, err
 		}
 		if response.Present {
@@ -357,8 +352,8 @@ func (t *transport) getSuccessorList(address string) ([]string, error) {
 		// delaying retries so that other nodes have the opportunity to unlock resources.
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.lock.Unlock()
-	return nil, fmt.Errorf("getChordConfig rpc failed after max retries")
+	conn.lock.RUnlock()
+	return nil, fmt.Errorf("getSuccessorList rpc failed after max retries")
 }
 
 // notify doesn't need to do retries or return anything. We assume that node exists.
@@ -372,7 +367,7 @@ func (t *transport) notify(address string, key string) {
 
 	_, err = conn.client.Notify(ctx, &pb.AddressRequest{Address: key})
 	if err != nil {
-		conn.lock.Unlock()
+		conn.lock.RUnlock()
 		return
 	}
 	conn.unlockAndTryUpdateTime()
@@ -389,7 +384,7 @@ func (t *transport) ping(address string) bool {
 
 	_, err = conn.client.Ping(ctx, &pb.Empty{})
 	if err != nil {
-		conn.lock.Unlock()
+		conn.lock.RUnlock()
 		return false
 	}
 	conn.unlockAndTryUpdateTime()

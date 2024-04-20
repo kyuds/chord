@@ -82,7 +82,7 @@ func (c *ChordNode) Start() error {
 			}
 			select {
 			case <-stabilizer.C:
-				// c.stabilize()
+				c.stabilize()
 			case <-fingerfix.C:
 				nextFingerIndex = c.fixFingerTable(nextFingerIndex)
 			case <-liveliness.C:
@@ -131,31 +131,53 @@ func (c *ChordNode) join() error {
 // Helper function for stabilization
 func (c *ChordNode) stabilize() {
 	c.stateLock.Lock()
-	succ := c.successorList[0]
-	succList, err1 := c.transport.getSuccessorList(succ)
-	succPred, err2 := c.transport.getPredecessor(succ)
-	if err1 != nil || err2 != nil {
-		if len(c.successorList) == 1 {
-			panic("successorlist ran out")
+	defer c.stateLock.Unlock()
+	c.stabilize_internal()
+
+	// fmt.Println("stabilize finished")
+	// fmt.Println(c.successorList)
+	// fmt.Println(c.predecessor)
+}
+
+// actual stabilization routine.
+// separated for more robust synchronization.
+func (c *ChordNode) stabilize_internal() {
+	var succ string
+	var succList []string
+	var succPred string
+
+	succ = c.successorList[0]
+
+	if succ == c.conf.Address {
+		succList = c.successorList
+		succPred = c.predecessor
+	} else {
+		var err1, err2 error
+		succList, err1 = c.transport.getSuccessorList(succ)
+		succPred, err2 = c.transport.getPredecessor(succ)
+
+		if err1 != nil || err2 != nil {
+			if len(c.successorList) == 1 {
+				panic("successorlist ran out")
+			}
+			c.successorList = c.successorList[:len(c.successorList)-1]
+			c.stabilize_internal()
+			return
 		}
-		c.successorList = c.successorList[:len(c.successorList)-1]
-		c.stateLock.Unlock()
-		c.stabilize()
-		return
 	}
-	c.successorList = append(c.successorList[:1], succList[:len(succList)-1]...)
-	if bigInRange(c.ipHash, getHash(c.conf.Hash, c.successorList[0]), getHash(c.conf.Hash, succPred)) {
+	c.successorList = append([]string{succ}, succList[:len(succList)-1]...)
+	if bigInRange(c.ipHash, getHash(c.conf.Hash, succ), getHash(c.conf.Hash, succPred)) {
 		succList2, err := c.transport.getSuccessorList(succPred)
 		if err == nil {
 			c.successorList = append([]string{succPred}, succList2[:len(succList2)-1]...)
 		}
 	}
-	c.stateLock.Unlock()
+	c.transport.notify(succ, c.conf.Address)
 }
 
 // Helper function for rectifying
 func (c *ChordNode) rectify(predecessor string) {
-	// TODO: should this be made TryLock?
+	// TODO: maybe we don't need locks here???
 	c.stateLock.Lock()
 	defer c.stateLock.Unlock()
 	b1 := getHash(c.conf.Hash, c.predecessor)
@@ -188,10 +210,11 @@ func (c *ChordNode) LookUp(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// handle case when we are immediate predecessor
-	if c.conf.Address == pred {
-		return c.successorList[0], nil
-	}
+	// // handle case when we are immediate predecessor
+	// if c.conf.Address == pred {
+	// 	fmt.Println("3")
+	// 	return c.successorList[0], nil
+	// }
 	return c.transport.getSuccessor(pred)
 }
 
@@ -222,7 +245,7 @@ func (c *ChordNode) findPredecessor(key *big.Int) (string, error) {
 			}
 		}
 	}
-	return "", nil
+	return curr, nil
 }
 
 // TODO
@@ -265,7 +288,7 @@ func (c *ChordNode) GetChordConfigs(ctx context.Context, r *pb.Empty) (*pb.Confi
 
 func (c *ChordNode) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
 	if c.stateLock.TryRLock() {
-		defer c.stateLock.Unlock()
+		defer c.stateLock.RUnlock()
 		return &pb.AddressResponse{
 			Present: true,
 			Address: c.successorList[0],
@@ -275,11 +298,18 @@ func (c *ChordNode) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressR
 		Present: false,
 		Address: "",
 	}, nil
+
+	// c.stateLock.RLock()
+	// defer c.stateLock.RUnlock()
+	// return &pb.AddressResponse{
+	// 	Present: true,
+	// 	Address: c.successorList[0],
+	// }, nil
 }
 
 func (c *ChordNode) ClosestPrecedingFinger(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
 	if c.stateLock.TryRLock() {
-		defer c.stateLock.Unlock()
+		defer c.stateLock.RUnlock()
 		return &pb.AddressResponse{
 			Present: true,
 			Address: c.closestPrecedingFinger(stringToBig(r.HashValue)),
@@ -294,7 +324,7 @@ func (c *ChordNode) ClosestPrecedingFinger(ctx context.Context, r *pb.HashKeyReq
 // for joining ONLY
 func (c *ChordNode) FindPredecessor(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
 	if c.stateLock.TryRLock() {
-		defer c.stateLock.Unlock()
+		defer c.stateLock.RUnlock()
 		found, err := c.findPredecessor(stringToBig(r.HashValue))
 		if err != nil {
 			return nil, err
@@ -312,7 +342,7 @@ func (c *ChordNode) FindPredecessor(ctx context.Context, r *pb.HashKeyRequest) (
 
 func (c *ChordNode) GetPredecessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
 	if c.stateLock.TryRLock() {
-		defer c.stateLock.Unlock()
+		defer c.stateLock.RUnlock()
 		return &pb.AddressResponse{
 			Present: true,
 			Address: c.predecessor,
@@ -326,7 +356,7 @@ func (c *ChordNode) GetPredecessor(ctx context.Context, r *pb.Empty) (*pb.Addres
 
 func (c *ChordNode) GetSuccessorList(ctx context.Context, r *pb.Empty) (*pb.AddressListResponse, error) {
 	if c.stateLock.TryRLock() {
-		defer c.stateLock.Unlock()
+		defer c.stateLock.RUnlock()
 		return &pb.AddressListResponse{
 			Present:   true,
 			Addresses: c.successorList,
@@ -341,7 +371,10 @@ func (c *ChordNode) GetSuccessorList(ctx context.Context, r *pb.Empty) (*pb.Addr
 }
 
 func (c *ChordNode) Notify(ctx context.Context, r *pb.AddressRequest) (*pb.Empty, error) {
-	c.rectify(r.Address)
+	// c.rectify(r.Address)
+	go func(c *ChordNode) {
+		c.rectify(r.Address)
+	}(c)
 	return &pb.Empty{}, nil
 }
 
