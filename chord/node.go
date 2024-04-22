@@ -1,179 +1,248 @@
 package chord
 
 import (
+	"chord/pb"
 	"context"
-	"encoding/hex"
 	"fmt"
-	"hash"
+	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/kyuds/chord/pb"
-	"google.golang.org/grpc"
 )
 
-type node struct {
+// ChordNode Node Abstraction. Because each
+// hash function produces a hash of different
+// size, we use a big Integer to store the
+// integer versions of the node ip hashes.
+// The successor list is integrated into the
+// finger table.
+type ChordNode struct {
 	// chord node settings
-	id       string
-	ip       string
-	hf       func() hash.Hash
-	shutdown int32
+	conf      *Config
+	ipHash    *big.Int
+	terminate atomic.Bool
 
-	// successors predecessors
-	repli    int
-	succ     *successors // basically a queue.
-	pred     string
-	predLock sync.RWMutex
-	ft       fingerTable
-	ftLen    int
+	// chord variable state
+	stateLock     sync.RWMutex
+	predecessor   string
+	successorList []string
 
-	// grpc
+	// chord fingertable
+	// ft fingerTable
+
+	// gRPC server & transport layer
+	transport *transport
 	pb.UnimplementedChordServer
-	rpc rpc
 }
 
-func initialize(conf *Config) (*node, *grpc.Server, error) {
-	n := &node{
-		id:    getHash(conf.Hash, conf.Address),
-		ip:    conf.Address,
-		hf:    conf.Hash,
-		repli: conf.MaxRepli,
-		ftLen: conf.Hash().Size() * 8,
+// constructor for new Chord Node instance. Initializes the
+// TCP listener and registers gRPC server.
+func NewChord(conf *Config) (*ChordNode, error) {
+	c := &ChordNode{
+		conf:          conf,
+		ipHash:        getHash(conf.Hash, conf.Address),
+		predecessor:   "",
+		successorList: nil,
 	}
-
-	n.ft = initFingerTable(n.id, n.ip, n.ftLen)
-	n.pred = ""
-	n.succ = createSuccessorQueue(n.ip)
-
-	// start RPC server: register chord server; start rpc server
-	tmpRPC, err := newRPC(conf)
+	c.successorList = make([]string, conf.NumSuccessor)
+	for i := 0; i < conf.NumSuccessor; i++ {
+		c.successorList[i] = conf.Address
+	}
+	c.terminate.Store(false)
+	transport, err := newTransport(conf)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	n.rpc = tmpRPC
-	pb.RegisterChordServer(tmpRPC.server, n)
-	return n, tmpRPC.server, nil
+	c.transport = transport
+	pb.RegisterChordServer(transport.server, c)
+	return c, nil
 }
 
-func (n *node) startChord(conf *Config) error {
-	err := n.rpc.start()
-
-	if err != nil {
+// Starts the Chord Node. Does the actual connection process
+// of the Chord Node to (if exists) a Chord ring. Starts
+// background goroutines that ensures the liveliness of the
+// system.
+func (c *ChordNode) Start() error {
+	c.transport.startServer()
+	if err := c.join(); err != nil {
+		c.transport.stopServer()
 		return err
 	}
+	go func(c *ChordNode) {
+		// timers
+		stabilizer := time.NewTicker(c.conf.Stabilization)
+		fingerfix := time.NewTicker(c.conf.FingerFix)
+		liveliness := time.NewTicker(c.conf.CheckAlive)
+		cleanup := time.NewTicker(c.conf.CleanConnection)
 
-	if conf.Joining {
-		err := n.joinNode(conf.JoinAddress)
-		if err != nil {
-			n.rpc.stop()
-			return err
-		}
-	}
-
-	// background processes
-	go func() {
-		// check predecessor existence --> clear predecessor if so
-		// clear out all ft table whenever node is determined to be not active
-		// normal stabilization process.
-		// update successors accordingly --> always maintain correct queue.
-		predchecker := time.NewTicker(4 * conf.Stabilization)
-		stabilizer := time.NewTicker(1 * conf.Stabilization)
+		nextFingerIndex := 0
 		for {
-			if atomic.LoadInt32(&n.shutdown) == 1 {
-				return
+			if c.terminate.Load() {
+				break
 			}
 			select {
-			case <-predchecker.C:
-				n.checkPredecessor()
 			case <-stabilizer.C:
-				n.stabilize()
+				c.stabilize()
+				c.stabilize()
+			case <-fingerfix.C:
+				nextFingerIndex = c.fixFingerTable(nextFingerIndex)
+			case <-liveliness.C:
+				if c.transport.checkServerDead() {
+					c.terminate.Store(true)
+				}
+			case <-cleanup.C:
+				c.transport.cleanIdleConnections()
+			default:
+				continue
 			}
+			time.Sleep(10 * time.Millisecond)
 		}
-
-	}()
-
-	go func() {
-		next := 0
-		ticker := time.NewTicker(conf.FingerFix)
-		for {
-			if atomic.LoadInt32(&n.shutdown) == 1 {
-				return
-			}
-			select {
-			case <-ticker.C:
-				next = n.fixFinger(next)
-			}
-		}
-	}()
+	}(c)
 
 	return nil
 }
 
-func (n *node) joinNode(address string) error {
-	// communicate to address
-	// check if hash function checksum align
-	// set predecessors and successors.
-	h, err := n.rpc.getHashFuncCheckSum(address)
+// Helper function to join existing chord ring provided that
+// the address is valid.
+func (c *ChordNode) join() error {
+	address := c.conf.JoinAddr
+	fmt.Println(address)
+	if address == "" {
+		return nil
+	}
+	hashFuncName, succLength, err := c.transport.getChordConfigs(address)
+	if err != nil {
+		return err
+	} else if succLength != c.conf.NumSuccessor || hashFuncName != c.conf.HashName() {
+		return fmt.Errorf("chord configurations (hash function, successor list length) doesn't match")
+	}
+	predecessor, err := c.transport.findPredecessor(address, bigToString(c.ipHash))
 	if err != nil {
 		return err
 	}
-	if h != getFuncHash(n.hf) {
-		return fmt.Errorf("using different hash function from Chord ring.")
-	}
-
-	succ, err := n.rpc.findSuccessor(address, getHash(n.hf, n.ip))
+	succList, err := c.transport.getSuccessorList(predecessor)
 	if err != nil {
 		return err
 	}
-	n.succ.push(succ)
-
+	c.predecessor = predecessor
+	c.successorList = succList
 	return nil
 }
 
-func (n *node) findSuccessor(hashedKey string) (string, error) {
-	pred, err := n.findPredecessor(hashedKey)
-	if err != nil {
-		return "", err
-	}
+// Helper function for stabilization
+func (c *ChordNode) stabilize() {
+	c.stateLock.Lock()
+	defer c.stateLock.Unlock()
+	c.stabilize_internal()
 
-	if pred == n.ip {
-		return n.succ.getSuccessor(), nil
-	}
-
-	succ, err := n.rpc.getSuccessor(pred)
-	if err != nil {
-		// n.ft.invalidateAddress(pred)
-		return "", err
-	}
-	return succ, nil
-	// return "", nil
+	// fmt.Println("stabilize finished")
+	// fmt.Println(c.successorList)
+	// fmt.Println(c.predecessor)
 }
 
-func (n *node) findPredecessor(hashed string) (string, error) {
-	curr := n.ip
-	succ := n.succ.getSuccessor()
-	bigKey := bigify(hashed)
+// actual stabilization routine.
+// separated for more robust synchronization.
+// TODO: padding for shorter succList
+func (c *ChordNode) stabilize_internal() {
+	var succ string
+	var succList []string
+	var succPred string
+
+	succ = c.successorList[0]
+
+	if succ == c.conf.Address {
+		succList = c.successorList
+		succPred = c.predecessor
+	} else {
+		var err1, err2 error
+		succList, err1 = c.transport.getSuccessorList(succ)
+		succPred, err2 = c.transport.getPredecessor(succ)
+
+		if err1 != nil || err2 != nil {
+			if len(c.successorList) == 1 {
+				panic("successorlist ran out")
+			}
+			c.successorList = c.successorList[1:len(c.successorList)]
+			c.stabilize_internal()
+			return
+		}
+	}
+	c.successorList = append([]string{succ}, succList[:len(succList)-1]...)
+	if bigInRange(c.ipHash, getHash(c.conf.Hash, succ), getHash(c.conf.Hash, succPred)) {
+		succList2, err := c.transport.getSuccessorList(succPred)
+		if err == nil {
+			c.successorList = append([]string{succPred}, succList2[:len(succList2)-1]...)
+		}
+	}
+	c.transport.notify(succ, c.conf.Address)
+}
+
+// Helper function for rectifying
+func (c *ChordNode) rectify(predecessor string) {
+	// TODO: maybe we don't need locks here???
+	c.stateLock.Lock()
+	defer c.stateLock.Unlock()
+	b1 := getHash(c.conf.Hash, c.predecessor)
+	key := getHash(c.conf.Hash, predecessor)
+	if bigInRange(b1, c.ipHash, key) || !c.transport.ping(c.predecessor) {
+		c.predecessor = predecessor
+	}
+}
+
+// TODO: Helper function for fixing fingers
+func (c *ChordNode) fixFingerTable(idx int) int {
+	return idx
+}
+
+// Stops all background processes and the gRPC server. Effectively
+// removes the Chord server from the Chord ring.
+// TODO: implement graceful exit (key notification)
+func (c *ChordNode) Stop() {
+	c.terminate.Store(true)
+	c.transport.stopServer()
+}
+
+// O(log N) Lookup operation for a key. Returns the IP Address and Node ID
+// of the chord node responsible for said key. Operation may error in the
+// following scenarios: there was an error with gRPC (this can be tried
+// again as the ring gets rebalanced), or there was an issue with the underlying
+// goroutines or gRPC server, which is a fatal error.
+func (c *ChordNode) LookUp(key string) (string, error) {
+	pred, err := c.findPredecessor(getHash(c.conf.Hash, key))
+	if err != nil {
+		return "", err
+	}
+	// // handle case when we are immediate predecessor
+	// if c.conf.Address == pred {
+	// 	fmt.Println("3")
+	// 	return c.successorList[0], nil
+	// }
+	return c.transport.getSuccessor(pred)
+}
+
+func (c *ChordNode) findPredecessor(key *big.Int) (string, error) {
+	var curr, succ string
 	var err error
+	curr = c.conf.Address
+
 	for {
-		if curr == n.ip {
-			succ = n.succ.getSuccessor()
+		if curr == c.conf.Address {
+			succ = c.successorList[0]
 		} else {
-			succ, err = n.rpc.getSuccessor(curr)
+			succ, err = c.transport.getSuccessor(curr)
 			if err != nil {
-				// n.ft.invalidateAddress(curr)
 				return "", err
 			}
 		}
-		if bigBetweenRightInclude(bigify(getHash(n.hf, curr)), bigify(getHash(n.hf, succ)), bigKey) {
+		b1, b2 := getHash(c.conf.Hash, curr), getHash(c.conf.Hash, succ)
+		if bigInRangeRightInclude(b1, b2, key) {
 			break
 		}
-		if curr == n.ip {
-			curr = n.closestPrecedingFinger(hashed)
+		if curr == c.conf.Address {
+			curr = c.closestPrecedingFinger(key)
 		} else {
-			curr, err = n.rpc.closestPrecedingFinger(curr, hashed)
+			curr, err = c.transport.closestPrecedingFinger(curr, bigToString(key))
 			if err != nil {
-				// n.ft.invalidateAddress(curr)
 				return "", err
 			}
 		}
@@ -181,190 +250,138 @@ func (n *node) findPredecessor(hashed string) (string, error) {
 	return curr, nil
 }
 
-func (n *node) closestPrecedingFinger(hashed string) string {
-	c1 := bigify(n.id)
-	c2 := bigify(hashed)
-	for i := n.ftLen - 1; i >= 0; i-- {
-		f := n.ft.get(i)
-		if !f.valid && i != 0 {
-			continue
+// TODO
+// This is tentative for only immediate successor pointer
+func (c *ChordNode) closestPrecedingFinger(key *big.Int) string {
+	f := big.NewInt(1)
+	f.Add(f, c.ipHash)
+	tmp := c.conf.Hash().Size() * 8
+	tmp2 := big.NewInt(0).Exp(big.NewInt(int64(2)), big.NewInt(int64(tmp)), big.NewInt(0))
+	f.Mod(f, tmp2)
+	if bigInRange(c.ipHash, key, f) {
+		return c.successorList[0]
+	}
+	return c.conf.Address
+}
+
+// Returns status of Chord Node. gRPC errors might invalidate the entire
+// node instance, in which all node activity terminates. In this case,
+// it is possible to create a new chord instance and start it.
+func (c *ChordNode) IsDead() bool {
+	return c.terminate.Load()
+}
+
+// Return configuration struct of ChordNode.
+func (c *ChordNode) GetConfig() *Config {
+	return c.conf
+}
+
+func (c *ChordNode) Exit() {
+	c.transport.stopServer()
+	c.terminate.Store(true)
+}
+
+// gRPC Server Implementation
+
+func (c *ChordNode) GetChordConfigs(ctx context.Context, r *pb.Empty) (*pb.ConfigResponse, error) {
+	return &pb.ConfigResponse{
+		HashFuncName:        c.conf.HashName(),
+		SuccessorListLength: int32(c.conf.NumSuccessor),
+	}, nil
+}
+
+func (c *ChordNode) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
+	if c.stateLock.TryRLock() {
+		defer c.stateLock.RUnlock()
+		return &pb.AddressResponse{
+			Present: true,
+			Address: c.successorList[0],
+		}, nil
+	}
+	return &pb.AddressResponse{
+		Present: false,
+		Address: "",
+	}, nil
+
+	// c.stateLock.RLock()
+	// defer c.stateLock.RUnlock()
+	// return &pb.AddressResponse{
+	// 	Present: true,
+	// 	Address: c.successorList[0],
+	// }, nil
+}
+
+func (c *ChordNode) ClosestPrecedingFinger(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
+	if c.stateLock.TryRLock() {
+		defer c.stateLock.RUnlock()
+		return &pb.AddressResponse{
+			Present: true,
+			Address: c.closestPrecedingFinger(stringToBig(r.HashValue)),
+		}, nil
+	}
+	return &pb.AddressResponse{
+		Present: false,
+		Address: "",
+	}, nil
+}
+
+// for joining ONLY
+func (c *ChordNode) FindPredecessor(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
+	if c.stateLock.TryRLock() {
+		defer c.stateLock.RUnlock()
+		found, err := c.findPredecessor(stringToBig(r.HashValue))
+		if err != nil {
+			return nil, err
 		}
-		if i == 0 && bigBetween(c1, c2, f.id) {
-			return n.succ.getSuccessor()
-		}
-		if i != 0 && bigBetween(c1, c2, f.id) {
-			return f.ipaddr
-		}
+		return &pb.AddressResponse{
+			Present: true,
+			Address: found,
+		}, nil
 	}
-	return n.ip
+	return &pb.AddressResponse{
+		Present: false,
+		Address: "",
+	}, nil
 }
 
-// finger fixing
-func (n *node) fixFinger(i int) int {
-	f := n.ft.get(i)
-	succ, err := n.findSuccessor(hex.EncodeToString(f.id.Bytes()))
-	if err != nil {
-		return i
+func (c *ChordNode) GetPredecessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
+	if c.stateLock.TryRLock() {
+		defer c.stateLock.RUnlock()
+		return &pb.AddressResponse{
+			Present: true,
+			Address: c.predecessor,
+		}, nil
 	}
-	n.ft.lock.Lock()
-	defer n.ft.lock.Unlock()
-	f.ipaddr = succ
-	f.iphash = getHash(n.hf, succ)
-	f.valid = true
-
-	return (i + 1) % n.ftLen
+	return &pb.AddressResponse{
+		Present: false,
+		Address: "",
+	}, nil
 }
 
-// stabilize
-func (n *node) stabilize() {
-	var succ string
-	var pred string
-	var err error
-
-	for {
-		succ = n.succ.getSuccessor()
-		if succ == n.ip {
-			pred = n.pred
-			break
-		} else {
-			pred, err = n.rpc.getPredecessor(succ)
-			if err != nil {
-				n.succ.pop()
-			} else {
-				break
-			}
-		}
+func (c *ChordNode) GetSuccessorList(ctx context.Context, r *pb.Empty) (*pb.AddressListResponse, error) {
+	if c.stateLock.TryRLock() {
+		defer c.stateLock.RUnlock()
+		return &pb.AddressListResponse{
+			Present:   true,
+			Addresses: c.successorList,
+			Length:    int32(len(c.successorList)),
+		}, nil
 	}
-
-	t1 := bigify(getHash(n.hf, n.ip))
-	t2 := bigify(getHash(n.hf, succ))
-	t3 := bigify(getHash(n.hf, pred))
-
-	if pred != "" && bigBetween(t1, t2, t3) {
-		succ = pred
-	}
-	n.succ.clear()
-	if succ != n.ip {
-		n.succ.push(succ)
-		_ = n.rpc.notify(succ, n.ip)
-		curr := succ
-		for {
-			if n.succ.length() >= n.repli {
-				break
-			}
-			curr, err = n.rpc.getSuccessor(curr)
-			if err != nil || curr == n.ip {
-				break
-			}
-			n.succ.push(curr)
-		}
-	}
+	return &pb.AddressListResponse{
+		Present:   false,
+		Addresses: nil,
+		Length:    int32(len(c.successorList)),
+	}, nil
 }
 
-// check predecessor
-func (n *node) checkPredecessor() {
-	err := n.rpc.ping(n.pred)
-	if err != nil {
-		//n.ft.invalidateAddress(n.pred)
-		n.predLock.Lock()
-		n.pred = ""
-		n.predLock.Unlock()
-	}
-}
-
-// node exit
-func (n *node) exit() {
-	n.rpc.stop()
-	atomic.StoreInt32(&n.shutdown, 1)
-}
-
-// gRPC Server (chord_grpc.pb.go) Implementation
-func (n *node) GetHashFuncCheckSum(ctx context.Context, r *pb.Empty) (*pb.HashFuncResponse, error) {
-	hashValue := getFuncHash(n.hf)
-	return &pb.HashFuncResponse{HexHashValue: hashValue}, nil
-}
-
-func (n *node) GetSuccessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
-	return &pb.AddressResponse{Address: n.succ.getSuccessor()}, nil
-}
-
-func (n *node) ClosestPrecedingFinger(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
-	a := n.closestPrecedingFinger(r.HexHashValue)
-	return &pb.AddressResponse{Address: a}, nil
-}
-
-func (n *node) FindSuccessor(ctx context.Context, r *pb.HashKeyRequest) (*pb.AddressResponse, error) {
-	a, err := n.findSuccessor(r.HexHashValue)
-	if err != nil {
-		return &pb.AddressResponse{Address: ""}, nil
-	}
-	return &pb.AddressResponse{Address: a}, nil
-}
-
-func (n *node) GetPredecessor(ctx context.Context, r *pb.Empty) (*pb.AddressResponse, error) {
-	return &pb.AddressResponse{Address: n.pred}, nil
-}
-
-func (n *node) Notify(ctx context.Context, r *pb.AddressRequest) (*pb.Empty, error) {
-	t1 := bigify(getHash(n.hf, n.pred))
-	t2 := bigify(getHash(n.hf, n.ip))
-	t3 := bigify(getHash(n.hf, r.Address))
-
-	if n.pred == "" || bigBetween(t1, t2, t3) {
-		n.predLock.Lock()
-		n.pred = r.Address
-		n.predLock.Unlock()
-	}
+func (c *ChordNode) Notify(ctx context.Context, r *pb.AddressRequest) (*pb.Empty, error) {
+	// c.rectify(r.Address)
+	go func(c *ChordNode) {
+		c.rectify(r.Address)
+	}(c)
 	return &pb.Empty{}, nil
 }
 
-func (n *node) Ping(ctx context.Context, r *pb.Empty) (*pb.Empty, error) {
+func (c *ChordNode) Ping(ctx context.Context, r *pb.Empty) (*pb.Empty, error) {
 	return &pb.Empty{}, nil
-}
-
-// successors struct
-type successors struct {
-	ip   string
-	data []string
-	lock sync.RWMutex
-}
-
-func createSuccessorQueue(ownIP string) *successors {
-	return &successors{
-		ip:   ownIP,
-		data: make([]string, 0),
-	}
-}
-
-func (q *successors) push(address string) {
-	q.data = append(q.data, address)
-}
-
-func (q *successors) pop() string {
-	d := q.data[0]
-	q.data = q.data[1:]
-	return d
-}
-
-func (q *successors) get(i int) string {
-	return q.data[i]
-}
-
-func (q *successors) length() int {
-	return len(q.data)
-}
-
-func (q *successors) empty() bool {
-	return len(q.data) == 0
-}
-
-func (q *successors) getSuccessor() string {
-	if q.empty() {
-		return q.ip
-	}
-	return q.get(0)
-}
-
-func (q *successors) clear() {
-	q.data = make([]string, 0)
 }

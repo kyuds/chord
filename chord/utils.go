@@ -1,57 +1,43 @@
 package chord
 
 import (
-	"crypto/sha1"
 	"encoding/hex"
 	"hash"
 	"math/big"
-	"reflect"
-	"runtime"
 )
 
-// Utility functions for Chord.
-
-// Used to hash the name of the hash function
-// used in Chord to ensure that all nodes share
-// the same hash function.
-// ex: hash "crypto/sha1.New":
-// getFuncHash(sha1.New) -> a6f0f8d9a226b2c8f385aed3583d14c3c0743629
-func getFuncHash(i interface{}) string {
-	funcName := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
-	checkSum := sha1.Sum([]byte(funcName))
-	return hex.EncodeToString(checkSum[:])
-}
-
-// use hash function to convert key to hashed hex string
-func getHash(h func() hash.Hash, key string) string {
+// hashing a string to big.Int representation
+func getHash(h func() hash.Hash, key string) *big.Int {
 	hasher := h()
 	hasher.Write([]byte(key))
-	checkSum := hasher.Sum(nil)
-	return hex.EncodeToString(checkSum[:])
+	return new(big.Int).SetBytes(hasher.Sum(nil))
 }
 
-// math/big library abstractions
-func bigify(hashed string) *big.Int {
-	h, _ := hex.DecodeString(hashed)
-	return new(big.Int).SetBytes(h)
+// converter from big.Int to hex string (for rpc)
+func bigToString(b *big.Int) string {
+	return hex.EncodeToString(b.Bytes())
 }
 
-func bigPow(x, y int) *big.Int {
-	return big.NewInt(0).Exp(big.NewInt(int64(x)), big.NewInt(int64(y)), big.NewInt(0))
+// converter hex from string to big.Int (for rpc)
+func stringToBig(h string) *big.Int {
+	b, _ := hex.DecodeString(h)
+	return new(big.Int).SetBytes(b)
 }
 
-func bigBetween(x, y, key *big.Int) bool {
-	switch x.Cmp(y) {
+// b1 < key < b2
+func bigInRange(b1, b2, key *big.Int) bool {
+	switch b1.Cmp(b2) {
 	case -1:
-		return x.Cmp(key) == -1 && y.Cmp(key) == 1
+		return b1.Cmp(key) == -1 && b2.Cmp(key) == 1
 	case 0:
-		return x.Cmp(key) != 0
+		return b1.Cmp(key) != 0
 	case 1:
-		return x.Cmp(key) == -1 || y.Cmp(key) == 1
+		return b1.Cmp(key) == -1 || b2.Cmp(key) == 1
 	}
 	return true
 }
 
-func bigBetweenRightInclude(x, y, key *big.Int) bool {
-	return bigBetween(x, y, key) || y.Cmp(key) == 0
+// b1 < key <= b2
+func bigInRangeRightInclude(b1, b2, key *big.Int) bool {
+	return bigInRange(b1, b2, key) || b2.Cmp(key) == 0
 }
