@@ -41,3 +41,7 @@ func bigInRange(b1, b2, key *big.Int) bool {
 func bigInRangeRightInclude(b1, b2, key *big.Int) bool {
 	return bigInRange(b1, b2, key) || b2.Cmp(key) == 0
 }
+
+func bigPowTwo(i int) *big.Int {
+	return big.NewInt(0).Exp(big.NewInt(int64(2)), big.NewInt(int64(i)), big.NewInt(0))
+}

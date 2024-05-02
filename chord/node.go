@@ -28,7 +28,7 @@ type ChordNode struct {
 	successorList []string
 
 	// chord fingertable
-	// ft fingerTable
+	ft ftable
 
 	// gRPC server & transport layer
 	transport *transport
@@ -45,6 +45,7 @@ func NewChord(conf *Config) (*ChordNode, error) {
 		successorList: nil,
 	}
 	c.successorList = make([]string, conf.NumSuccessor)
+	c.ft = initFingerTable(c.ipHash, conf.Address, conf.Hash().Size())
 	for i := 0; i < conf.NumSuccessor; i++ {
 		c.successorList[i] = conf.Address
 	}
@@ -75,7 +76,7 @@ func (c *ChordNode) Start() error {
 		liveliness := time.NewTicker(c.conf.CheckAlive)
 		cleanup := time.NewTicker(c.conf.CleanConnection)
 
-		nextFingerIndex := 0
+		next := 0
 		for {
 			if c.terminate.Load() {
 				break
@@ -85,7 +86,7 @@ func (c *ChordNode) Start() error {
 				c.stabilize()
 				c.stabilize()
 			case <-fingerfix.C:
-				nextFingerIndex = c.fixFingerTable(nextFingerIndex)
+				next = c.fixFingerTable(next)
 			case <-liveliness.C:
 				if c.transport.checkServerDead() {
 					c.terminate.Store(true)
@@ -189,9 +190,21 @@ func (c *ChordNode) rectify(predecessor string) {
 	}
 }
 
-// TODO: Helper function for fixing fingers
-func (c *ChordNode) fixFingerTable(idx int) int {
-	return idx
+// Helper function for fixing fingers
+func (c *ChordNode) fixFingerTable(i int) int {
+	f := c.ft.get(i)
+	succ, err := c.findSuccessor(f.id)
+	if err != nil {
+		return i
+	}
+
+	c.ft.lock()
+	defer c.ft.unlock()
+
+	f.ip = succ
+	f.valid = true
+
+	return (i + 1) % c.ft.size
 }
 
 // Stops all background processes and the gRPC server. Effectively
@@ -208,15 +221,14 @@ func (c *ChordNode) Stop() {
 // again as the ring gets rebalanced), or there was an issue with the underlying
 // goroutines or gRPC server, which is a fatal error.
 func (c *ChordNode) LookUp(key string) (string, error) {
-	pred, err := c.findPredecessor(getHash(c.conf.Hash, key))
+	return c.findSuccessor(getHash(c.conf.Hash, key))
+}
+
+func (c *ChordNode) findSuccessor(key *big.Int) (string, error) {
+	pred, err := c.findPredecessor(key)
 	if err != nil {
 		return "", err
 	}
-	// // handle case when we are immediate predecessor
-	// if c.conf.Address == pred {
-	// 	fmt.Println("3")
-	// 	return c.successorList[0], nil
-	// }
 	return c.transport.getSuccessor(pred)
 }
 
@@ -250,15 +262,21 @@ func (c *ChordNode) findPredecessor(key *big.Int) (string, error) {
 	return curr, nil
 }
 
-// TODO
-// This is tentative for only immediate successor pointer
+// As shown in original Chord paper
 func (c *ChordNode) closestPrecedingFinger(key *big.Int) string {
-	f := big.NewInt(1)
-	f.Add(f, c.ipHash)
-	tmp := c.conf.Hash().Size() * 8
-	tmp2 := big.NewInt(0).Exp(big.NewInt(int64(2)), big.NewInt(int64(tmp)), big.NewInt(0))
-	f.Mod(f, tmp2)
-	if bigInRange(c.ipHash, key, f) {
+	c.ft.rlock()
+	defer c.ft.runlock()
+	for i := c.ft.size - 1; i >= 0; i-- {
+		f := c.ft.get(i)
+		if f.valid && bigInRange(c.ipHash, key, f.id) {
+			if c.transport.ping(f.ip) {
+				return f.ip
+			} else {
+				c.ft.invalidate(i)
+			}
+		}
+	}
+	if bigInRange(c.ipHash, key, c.ft.succ) {
 		return c.successorList[0]
 	}
 	return c.conf.Address
